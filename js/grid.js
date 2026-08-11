@@ -164,7 +164,10 @@ export function render() {
         <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4"
              stroke-linecap="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
       </button>`;
-    return `<div class="gc gh${isFiltered(c.key) ? ' filtered' : ''}" data-k="${escHtml(c.key)}">${rotulo}${embudo}</div>`;
+    // draggable en la cabecera: arrastrarla reordena la columna. El clic sigue
+    // ordenando — el navegador no dispara click si ha habido arrastre.
+    return `<div class="gc gh${isFiltered(c.key) ? ' filtered' : ''}" data-k="${escHtml(c.key)}"
+                 draggable="true" title="Arrastra para mover la columna">${rotulo}${embudo}</div>`;
   }).join('');
 
   const body = rows.map((a) => {
@@ -278,6 +281,120 @@ function startEdit(cellEl, acc, col) {
   if (ctrl.tagName === 'SELECT') ctrl.addEventListener('change', () => ctrl.blur());
 }
 
+// ──────────────── reordenar columnas arrastrando ────────────────
+// Alternativa directa a las flechas del selector de columnas, que se mantienen
+// como camino accesible y como única vía en táctil (el arrastre HTML5 no
+// funciona con el dedo).
+
+let drag = null;          // { key, sobre, antes }
+let arrastroReciente = 0; // sella el fin del arrastre para descartar el clic
+
+// El orden completo y efectivo, incluidas las columnas ocultas: si solo se
+// reordenaran las visibles, al volver a mostrar una aparecería siempre al final.
+function ordenCompleto(prefs) {
+  const todas = allColumns().map((c) => c.key);
+  const guardado = Array.isArray(prefs.order) && prefs.order.length
+    ? prefs.order.filter((k) => todas.includes(k))
+    : [];
+  return [...guardado, ...todas.filter((k) => !guardado.includes(k))];
+}
+
+async function moveColumn(desdeKey, sobreKey, antes) {
+  if (!desdeKey || !sobreKey || desdeKey === sobreKey) return;
+  const prefs = getProfile()?.column_prefs || {};
+  const order = ordenCompleto(prefs);
+
+  const i = order.indexOf(desdeKey);
+  if (i < 0) return;
+  order.splice(i, 1);
+  let j = order.indexOf(sobreKey);
+  if (j < 0) return;
+  if (!antes) j += 1;
+  order.splice(j, 0, desdeKey);
+
+  // Si el usuario no tenía preferencias guardadas, este arrastre las crea. Hay
+  // que sembrar `hidden` con lo que hay en pantalla ahora mismo; con la lista
+  // vacía aparecerían de golpe las columnas ocultas por defecto.
+  const hidden = Array.isArray(prefs.order) && prefs.order.length
+    ? (prefs.hidden || [])
+    : allColumns().map((c) => c.key).filter((k) => !visibleColumns().some((c) => c.key === k));
+
+  await setPrefs({ order, hidden });
+}
+
+function clearDropHint() {
+  document.getElementById('dropLine')?.remove();
+  document.querySelectorAll('.gh.drop-target, .gh.dragging')
+    .forEach((el) => el.classList.remove('drop-target', 'dragging'));
+}
+
+// Marca dónde va a aterrizar: una línea a toda la altura de la tabla en el punto
+// exacto de inserción, y la cabecera de destino resaltada.
+function showDropHint(gh, antes) {
+  const table = document.querySelector('.gtable');
+  if (!table) return;
+  let line = document.getElementById('dropLine');
+  if (!line) {
+    line = document.createElement('div');
+    line.id = 'dropLine';
+    line.className = 'drop-line';
+    table.appendChild(line);
+  }
+  const t = table.getBoundingClientRect();
+  const r = gh.getBoundingClientRect();
+  line.style.left = `${Math.round((antes ? r.left : r.right) - t.left)}px`;
+
+  table.querySelectorAll('.gh.drop-target').forEach((el) => el.classList.remove('drop-target'));
+  gh.classList.add('drop-target');
+}
+
+function initColumnDrag(grid) {
+  grid.addEventListener('dragstart', (e) => {
+    const gh = e.target.closest('.gh');
+    if (!gh) return;
+    drag = { key: gh.dataset.k };
+    gh.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    // Firefox no inicia el arrastre si no se fija algún dato.
+    e.dataTransfer.setData('text/plain', gh.dataset.k);
+  });
+
+  grid.addEventListener('dragover', (e) => {
+    if (!drag) return;
+    const gh = e.target.closest('.gh');
+    if (!gh) return;
+    e.preventDefault();
+    const r = gh.getBoundingClientRect();
+    // Mitad izquierda → cae antes de esa columna; mitad derecha → después.
+    drag.antes = (e.clientX - r.left) < r.width / 2;
+    drag.sobre = gh.dataset.k;
+    showDropHint(gh, drag.antes);
+  });
+
+  grid.addEventListener('drop', (e) => {
+    if (!drag) return;
+    e.preventDefault();
+    const { key, sobre, antes } = drag;
+    clearDropHint();
+    drag = null;
+    arrastroReciente = Date.now();
+    moveColumn(key, sobre, antes);
+  });
+
+  grid.addEventListener('dragend', () => {
+    clearDropHint();
+    drag = null;
+    arrastroReciente = Date.now();
+  });
+
+  // Soltar fuera de una cabecera no debe dejar la línea colgada.
+  grid.addEventListener('dragleave', (e) => {
+    if (drag && !e.relatedTarget?.closest?.('.ghead')) {
+      document.querySelectorAll('.gh.drop-target').forEach((el) => el.classList.remove('drop-target'));
+    }
+  });
+}
+
 // ─────────────────────── selector de columnas ───────────────────────
 
 export function openColumnPicker(anchorEl) {
@@ -349,12 +466,16 @@ export function openColumnPicker(anchorEl) {
 
 export function initGrid() {
   const grid = document.getElementById('grid');
+  initColumnDrag(grid);
 
   grid.addEventListener('click', (e) => {
     if (e.target.closest('[data-stop]')) return;    // enlaces de HubSpot
 
     const sortBtn = e.target.closest('[data-sort]');
     if (sortBtn) {
+      // Red de seguridad: si el navegador emitiera un clic justo después de un
+      // arrastre, mover una columna cambiaría además el orden de las filas.
+      if (Date.now() - arrastroReciente < 250) return;
       const k = sortBtn.dataset.sort;
       if (sort.key === k) sort.dir *= -1; else { sort.key = k; sort.dir = 1; }
       render();

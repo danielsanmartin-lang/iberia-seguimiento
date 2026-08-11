@@ -16,11 +16,18 @@ export function todayISO() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
 export function fmtDate(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
-  const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   return `${d}/${MESES[Number(m) - 1]}/${y}`;
+}
+
+// '2026-08' → 'ago 2026'. Es la etiqueta del filtro de fecha, que agrupa por mes.
+export function fmtMonth(ym) {
+  const [y, m] = String(ym).split('-');
+  return `${MESES[Number(m) - 1] || '?'} ${y}`;
 }
 
 export function fmtDateTime(ts) {

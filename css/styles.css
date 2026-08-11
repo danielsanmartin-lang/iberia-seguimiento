@@ -164,7 +164,9 @@ main{padding:18px;max-width:100%}
    columnas en runtime según lo que el usuario elija ver, y editar en celda.  */
 .grid-wrap{overflow:auto;border:1px solid var(--line);border-radius:var(--rl);
   background:var(--surface);box-shadow:var(--shadow-sm);max-height:calc(100vh - 250px)}
-.gtable{min-width:min-content}
+/* relative: la línea que marca el destino al arrastrar se posiciona contra esto,
+   así abarca toda la altura de la tabla y no solo la cabecera. */
+.gtable{min-width:min-content;position:relative}
 .grow{display:grid;grid-template-columns:var(--cols);border-bottom:1px solid var(--line)}
 .grow:not(.ghead):hover{background:var(--teal-bg)}
 .ghead{
@@ -184,7 +186,18 @@ main{padding:18px;max-width:100%}
 .gc.editable{cursor:text}
 .grow:not(.ghead) .gc.editable:hover{box-shadow:inset 0 0 0 1px var(--teal-bd);border-radius:4px}
 .gc.editing{padding:2px 4px;overflow:visible}
-.gh{padding:0;position:relative}
+.gh{padding:0;position:relative;cursor:grab;user-select:none}
+.gh:active{cursor:grabbing}
+/* Columna que se está arrastrando: se apaga para que la vista se centre en el
+   destino, no en el origen. */
+.gh.dragging{opacity:.4}
+/* Destino: la cabecera se ilumina y la línea marca el punto exacto de caída. */
+.gh.drop-target{background:var(--teal-bg)}
+.drop-line{
+  position:absolute;top:0;bottom:0;width:3px;margin-left:-1px;
+  background:var(--teal);z-index:6;pointer-events:none;border-radius:2px;
+  box-shadow:0 0 0 1px var(--surface),0 0 10px var(--teal);
+}
 .gh-sort{
   flex:1;min-width:0;text-align:left;background:none;border:0;cursor:pointer;
   padding:8px 4px 8px 10px;font:inherit;font-size:10.5px;font-weight:700;letter-spacing:.06em;
