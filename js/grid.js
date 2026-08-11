@@ -56,8 +56,8 @@ function renderKpis() {
   const k = computeKpis();
   const el = document.getElementById('kpis');
   // Grupo de pastillas con su etiqueta. Si la columna está vacía en toda la
-  // tabla (p. ej. nadie ha puesto Deal todavía) no se pinta el grupo: una
-  // etiqueta suelta sin nada al lado solo genera dudas.
+  // tabla no se pinta el grupo: una etiqueta suelta sin nada al lado solo
+  // genera dudas.
   const grupo = (rotulo, key) => {
     const entries = breakdown(key);
     if (!entries.length) return '';
@@ -68,7 +68,6 @@ function renderKpis() {
     }).join('');
   };
   const owners = grupo('Owner', 'owner_id');
-  const deals = grupo('Deal', 'deal_stage');
 
   el.innerHTML = `
     <div class="kpi-row">
@@ -79,9 +78,7 @@ function renderKpis() {
       ${kpiTile(k.sinfecha, 'Sin fecha', filters.datePreset === 'sinfecha', 'data-kpi="sinfecha"')}
       ${kpiTile(k.mias, 'Mías', filters.mine, 'data-kpi="mias"')}
     </div>
-    <div class="chip-row"${owners || deals ? '' : ' hidden'}>
-      ${owners}${owners && deals ? '<span class="chip-sep"></span>' : ''}${deals}
-    </div>`;
+    <div class="chip-row"${owners ? '' : ' hidden'}>${owners}</div>`;
 
   el.querySelectorAll('[data-kpi]').forEach((b) => b.addEventListener('click', () => {
     const k2 = b.dataset.kpi;
@@ -130,10 +127,6 @@ function cellHtml(acc, col) {
     return `<span class="${cls}">${fmtDate(v)}</span>`;
   }
   if (col.key === 'updated_at') return `<span class="muted">${fmtDateTime(v)}</span>`;
-  // deal_stage ya no es columna, pero las pastillas de KPI siguen usando esta
-  // pastilla de color, así que el estilo se mantiene aquí para los campos
-  // personalizados de tipo lista que quieran el mismo aspecto.
-  if (col.key === 'deal_stage' && v) return `<span class="deal d-${escHtml(String(v).replace(/\s+/g, '-'))}">${escHtml(v)}</span>`;
   if (col.key === 'owner_id') {
     if (!v) return '<span class="muted">—</span>';
     // Owner sin cuenta en la app todavía: se marca para que se note.

@@ -128,7 +128,7 @@ async function init() {
   initRouter();
   initGrid();
   initPanel(renderGrid);
-  initImportExport(renderGrid);
+  initImportExport();
   initAdmin(renderGrid);
 
   onAuthChange((event) => {

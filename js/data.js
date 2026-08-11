@@ -3,10 +3,11 @@
 // Un único registro de campos (F) alimenta dos listas que ya no coinciden:
 //   · GRID_COLUMNS  — lo que puede mostrar la tabla
 //   · PANEL_FIELDS  — lo que se edita en la ficha de la cuenta
-// Deal y la URL de HubSpot viven solo en la ficha: en la tabla ocupaban sitio
-// sin aportar, y la URL se ve igual en el icono que va junto al nombre.
-
-export const DEAL_STAGES = ['SQL', 'Demo', 'PoC', 'Negotiation', 'Verbal Agreement', 'Win'];
+// La fecha se edita en la tabla, no en la ficha. La URL de HubSpot al revés:
+// solo en la ficha, porque en la tabla ya se ve como icono junto al nombre.
+//
+// El campo Deal se retiró de la interfaz: no se rellenaba nunca. La columna
+// deal_stage sigue en la base de datos, vacía, por si algún día vuelve.
 
 // type gobierna cómo se pinta y cómo se edita:
 //   text | url | date | select | catalog (lista editable en BD) | owner
@@ -19,7 +20,6 @@ const F = {
   // filterBy: 'month' → el embudo agrupa por mes. Con los días sueltos había
   // que marcar 45 casillas para acotar un trimestre.
   next_touch:  { key: 'next_touch',  label: 'Fecha',          type: 'date', filterBy: 'month' },
-  deal_stage:  { key: 'deal_stage',  label: 'Deal',           type: 'select', options: DEAL_STAGES },
   hubspot_url: { key: 'hubspot_url', label: 'URL de HubSpot', type: 'url' },
 };
 
@@ -41,9 +41,10 @@ export const GRID_COLUMNS = [
     filterBy: 'month' },
 ];
 
-// Campos de la ficha, en el orden en que se pintan.
+// Campos de la ficha, en el orden en que se pintan. La fecha no está: se edita
+// en su columna de la tabla, y repetirla aquí solo daba dos sitios donde mirar.
 export const PANEL_FIELDS = [
-  F.region, F.sector, F.owner_id, F.next_touch, F.deal_stage, F.hubspot_url,
+  F.region, F.sector, F.owner_id, F.hubspot_url,
 ];
 
 // Vista por defecto: todo menos "Actualizado", que interesa poco a diario.

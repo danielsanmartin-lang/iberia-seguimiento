@@ -88,7 +88,9 @@ function noteHtml(n, meId) {
   </article>`;
 }
 
-export async function openPanel(id) {
+// Ficha de la cuenta: solo sus datos. El historial no se repite aquí — se abre
+// desde el botón «Notas» de la tabla, que es su sitio.
+export function openPanel(id) {
   const acc = state.byId.get(id);
   if (!acc) return;
   currentId = id;
@@ -103,8 +105,6 @@ export async function openPanel(id) {
       <input data-f="name" type="text" value="${escHtml(acc.name)}"></label>
     ${cols.map((c) => `<label class="fld${c.type === 'url' ? ' wide' : ''}">
         <span>${escHtml(c.label)}</span>${fieldControl(acc, c)}</label>`).join('')}
-
-    ${notesBlockHtml()}
 
     <div class="panel-foot">
       <button id="delAcc" class="btn danger ghost" type="button">Borrar cuenta</button>
@@ -134,8 +134,6 @@ export async function openPanel(id) {
     toast('Cuenta borrada.');
     afterChange();
   });
-
-  renderNotes(id);
 }
 
 // Popup con ÚNICAMENTE el historial: ni región, ni owner, ni fecha, ni el botón
@@ -245,13 +243,11 @@ function initNewDialog() {
       sector: dlg.querySelector('#nSector').value || null,
       owner_id: ownerId,
       owner_name: owner ? (owner.full_name || owner.email) : null,
-      next_touch: dlg.querySelector('#nDate').value || null,
-      deal_stage: dlg.querySelector('#nDeal').value || null,
       hubspot_url: dlg.querySelector('#nHs').value.trim() || null,
     });
     if (error) { toast(`No se pudo crear: ${error.message}`, 'err'); return; }
     dlg.close();
-    ['#nHs', '#nDate'].forEach((s) => { dlg.querySelector(s).value = ''; });
+    dlg.querySelector('#nHs').value = '';
     toast(`«${account.name}» creada.`);
     afterChange();
     openPanel(account.id);

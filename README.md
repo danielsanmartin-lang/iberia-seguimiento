@@ -29,29 +29,37 @@ curl -s "https://ppklcfsudukieqyaloze.supabase.co/rest/v1/accounts?select=name" 
 
 ## Qué hace
 
-**Tabla** — Las 6 columnas del Excel (Cuenta, Región, Sector, Owner, Fecha,
-Notas) más `Deal`, `URL de HubSpot`, `Próximo paso` y contador de notas.
+**Tabla** — Cuenta, Región, Sector, Owner, Fecha, **Última nota** e **Histórico
+de notas**. «Actualizado» está disponible pero oculta por defecto.
 
 - **Edición en la celda**: un clic, se guarda al salir, `Esc` cancela.
-- **Filtro por columna** con recuentos, igual que el autofiltro de Excel, más
-  buscador global y presets de fecha (hoy · esta semana · vencidos · sin fecha).
-- **Columnas a la carta**: cada usuario elige qué ve y en qué orden; se guarda en
-  su perfil, no en el navegador, así que le sigue entre dispositivos.
+- **La última nota se lee entera** en su celda: la fila crece hasta que cabe.
+- **Histórico de notas**: un botón abre un popup con solo el historial.
+- **Filtro por columna** con recuentos, igual que el autofiltro de Excel. La
+  columna de fecha agrupa por mes («ago 2026»), no por día.
+- **Buscador global** que entra también dentro de todas las notas, no solo de
+  la última: un contacto suele estar enterrado en una entrada antigua.
+- **Columnas a la carta**: arrastra una cabecera para moverla de sitio, o usa el
+  botón «Columnas» para mostrar/ocultar. Se guarda en el perfil, no en el
+  navegador, así que te sigue entre dispositivos.
 - **Realtime**: los cambios de uno aparecen en la pantalla de los otros sin
   recargar. Es una hoja compartida; hace falta.
 - Las filas con fecha de seguimiento pasada salen en rojo.
 
-**Ficha lateral** — Todos los campos más el **historial**: entradas con autor y
-fecha automáticos. Cada uno edita solo lo que ha firmado él. El bloque de notas
-que venía del Excel entra como primera entrada, marcada como importada.
+**Ficha lateral** (doble clic en el nombre) — Cuenta, Región, Sector, Owner y
+URL de HubSpot. Nada más: el historial tiene su propio popup y la fecha se edita
+en su columna, así que no se repiten aquí.
+
+**Historial** — Entradas con autor y fecha automáticos; cada uno edita solo lo
+que ha firmado él. Las notas que venían del Excel están marcadas como importadas.
 
 **Panel superior** — Cuentas, Hoy, Esta semana, Vencidos, Sin fecha, Mías y
-recuentos por Owner y Deal. Todo clicable: filtra la tabla.
+recuentos por Owner. Todo clicable: filtra la tabla.
 
-**Import / Export** — Exporta a `.xlsx` o CSV exactamente lo que estés viendo
-(columnas visibles × filas filtradas). Importa Excel o CSV con previsualización;
-encuentra la cabecera aunque no esté en la primera fila y avisa de las filas que
-se parecen a cuentas ya existentes.
+**Export** — A `.xlsx` o CSV, exactamente lo que estés viendo (columnas visibles
+× filas filtradas). **No hay importación**: los datos entran por la tabla o por
+el historial, que llevan autor y fecha; traerlos de un fichero los dejaría sin
+firma.
 
 **Duplicados** — Compara nombres normalizados (sin acentos, sin `S.A.`/`Grupo`…)
 y lista las parejas sospechosas. No fusiona nada por su cuenta.
@@ -89,7 +97,7 @@ js/
   grid.js                 tabla: orden, filtros, edición en celda, selector de columnas
   filters.js              estado de filtrado, KPIs y menú de filtro por columna
   panel.js                ficha lateral, historial de notas y alta de cuentas
-  importexport.js         XLSX/CSV y detector de duplicados
+  importexport.js         exportación XLSX/CSV y detector de duplicados
   admin.js                usuarios, catálogos y columnas personalizadas
   util.js                 fechas, escapado, normalización de nombres, avisos
 supabase/

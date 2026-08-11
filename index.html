@@ -72,7 +72,6 @@
     <span id="rowCount" class="count"></span>
     <button id="btnCols" class="btn" type="button">Columnas</button>
     <button id="btnDup" class="btn" type="button">Duplicados</button>
-    <button id="btnImport" class="btn" type="button">Importar</button>
     <button id="btnExport" class="btn" type="button">Exportar</button>
     <button id="btnNew" class="btn primary" type="button">+ Nueva cuenta</button>
   </div>
@@ -169,22 +168,12 @@
     <label class="fld"><span>Región</span><select id="nRegion"></select></label>
     <label class="fld"><span>Sector</span><select id="nSector"></select></label>
     <label class="fld"><span>Owner</span><select id="nOwner"></select></label>
-    <label class="fld"><span>Fecha de seguimiento</span><input id="nDate" type="date"></label>
-    <label class="fld"><span>Deal</span><select id="nDeal">
-      <option value="">—</option><option>SQL</option><option>Demo</option><option>PoC</option>
-      <option>Negotiation</option><option>Verbal Agreement</option><option>Win</option></select></label>
     <label class="fld wide"><span>URL de HubSpot</span><input id="nHs" type="url" placeholder="https://app-eu1.hubspot.com/…"></label>
   </div>
   <div class="dlg-acts">
     <button id="nCancel" class="btn" type="button">Cancelar</button>
     <button id="nCreate" class="btn primary" type="button">Crear</button>
   </div>
-</dialog>
-
-<dialog id="dlgImport" class="dlg">
-  <h2>Importar desde Excel o CSV</h2>
-  <div id="impBody"></div>
-  <input id="impFile" type="file" accept=".xlsx,.xls,.csv" hidden>
 </dialog>
 
 <dialog id="dlgDup" class="dlg">
