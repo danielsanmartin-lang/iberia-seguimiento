@@ -1,0 +1,52 @@
+# Mantiene vivo el proyecto de Supabase (plan Free).
+#
+# Supabase pausa los proyectos Free que no reciben actividad suficiente en 7
+# días. Lo que cuenta es el tráfico que ENTRA por la API del proyecto, no el SQL
+# que se ejecuta dentro, así que el latido tiene que venir de fuera.
+# Ver: https://supabase.com/docs/guides/platform/free-project-pausing
+#
+# Aviso: GitHub desactiva los workflows programados si el repo pasa 60 días sin
+# actividad. Avisa por email y se reactivan con un clic desde la pestaña Actions.
+
+name: Supabase keep-alive
+
+on:
+  schedule:
+    # Minutos "impares" a propósito: los cron de GitHub se retrasan o se saltan
+    # en horas punta, y las horas en punto son las peores. Cuatro tiradas al día
+    # dan margen de sobra si alguna se pierde.
+    - cron: '17 6 * * *'
+    - cron: '17 11 * * *'
+    - cron: '17 16 * * *'
+    - cron: '17 21 * * *'
+  workflow_dispatch:
+
+# El job no necesita ningún permiso sobre el repositorio.
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      # Claves PÚBLICAS por diseño (las mismas que js/config.js: van en el
+      # navegador de cualquier usuario). La seguridad real está en RLS + Auth.
+      # NUNCA pongas aquí la service_role key.
+      SUPABASE_URL: https://ppklcfsudukieqyaloze.supabase.co
+      SUPABASE_PUBLISHABLE_KEY: sb_publishable_dDlkNDaWmCTg3mXLLbsacw_yXLuHDfE
+    steps:
+      # Una sola llamada, pero es una petición a la Data API + una escritura real
+      # en Postgres. No se lee de `accounts`: sin sesión, RLS necesita
+      # private.is_member(), que anon no puede ejecutar (correcto), y devolvería
+      # 401 haciendo fallar el job cada vez.
+      - name: Latido (RPC ping)
+        run: |
+          set -euo pipefail
+          echo "last_ping: $(
+            curl -sS --fail-with-body --retry 3 --retry-delay 10 --max-time 30 \
+              -X POST "$SUPABASE_URL/rest/v1/rpc/ping" \
+              -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+              -H "Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{}'
+          )"

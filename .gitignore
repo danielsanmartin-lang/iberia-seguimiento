@@ -1,0 +1,20 @@
+# ─── DATOS: no se versionan nunca ───
+# Este repo es PÚBLICO (necesario para GitHub Pages). Las notas de las cuentas
+# contienen nombres de contactos, cargos, teléfonos y valoraciones internas.
+# Los datos viven solo en Supabase, protegidos por Auth + RLS.
+seed*.sql
+*seed*.json
+datos/
+*.xlsx
+*.xls
+*.csv
+
+# Secretos. El frontend solo usa claves públicas (js/config.js);
+# la service_role NUNCA se versiona: vive como secret del runtime de Supabase.
+.env
+.env.*
+
+# Entorno local
+.claude/
+.DS_Store
+node_modules/

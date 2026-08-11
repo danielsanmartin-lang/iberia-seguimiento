@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IBERIA · Seguimiento</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<!-- Tema antes del primer pintado: si no, se ve un fogonazo blanco en modo noche. -->
+<script>(function(){try{var t=localStorage.getItem('iberia_theme');if(t!=='dia'&&t!=='noche'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'noche':'dia';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230EA5A0'/><path d='M8 10h16M8 16h16M8 22h11' stroke='white' stroke-width='2.6' stroke-linecap='round'/></svg>">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div id="boot" class="boot"><div class="spinner"></div></div>
+
+<!-- ─────────────────────────── acceso ─────────────────────────── -->
+<section id="view-login" class="auth" hidden>
+  <form id="loginForm" class="auth-card">
+    <div class="brand"><span class="brand-mark">IB</span><div><h1>IBERIA · Seguimiento</h1>
+      <p>Seguimiento comercial de cuentas</p></div></div>
+    <label class="fld wide"><span>Correo</span>
+      <input id="loginEmail" type="email" autocomplete="username" required></label>
+    <label class="fld wide"><span>Contraseña</span>
+      <span class="pw"><input id="loginPassword" type="password" autocomplete="current-password" required>
+        <button type="button" class="pw-eye" data-pwtoggle="loginPassword" title="Ver contraseña"></button></span></label>
+    <p id="loginErr" class="msg err" hidden></p>
+    <button id="loginBtn" class="btn primary wide" type="submit">Entrar</button>
+    <p class="auth-note">El acceso es por invitación. Si necesitas una cuenta, pídesela al administrador.</p>
+  </form>
+</section>
+
+<section id="view-pwchange" class="auth" hidden>
+  <form id="pwForm" class="auth-card">
+    <div class="brand"><span class="brand-mark">IB</span><div><h1>Cambia tu contraseña</h1>
+      <p>Estás usando una contraseña provisional</p></div></div>
+    <label class="fld wide"><span>Nueva contraseña</span>
+      <span class="pw"><input id="pwNew" type="password" autocomplete="new-password" required minlength="8">
+        <button type="button" class="pw-eye" data-pwtoggle="pwNew" title="Ver contraseña"></button></span></label>
+    <label class="fld wide"><span>Repítela</span>
+      <input id="pwConfirm" type="password" autocomplete="new-password" required minlength="8"></label>
+    <p id="pwErr" class="msg err" hidden></p>
+    <button id="pwBtn" class="btn primary wide" type="submit">Guardar y continuar</button>
+  </form>
+</section>
+
+<!-- ─────────────────────────── cabecera ─────────────────────────── -->
+<header id="topbar" hidden>
+  <a class="brand small" href="#/tabla"><span class="brand-mark">IB</span>
+    <strong>IBERIA · Seguimiento</strong></a>
+  <nav>
+    <a href="#/tabla">Cuentas</a>
+    <a id="navAdmin" href="#/admin" hidden>Administración</a>
+    <a href="#/perfil" id="userLink"><span id="userName"></span></a>
+    <button id="themeBtn" class="icon-btn" type="button" title="Cambiar tema"></button>
+    <button id="logoutBtn" class="icon-btn" type="button" title="Cerrar sesión">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round"><path d="M15 17l5-5-5-5M20 12H9M12 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6"/></svg>
+    </button>
+  </nav>
+</header>
+
+<!-- ─────────────────────────── tabla ─────────────────────────── -->
+<main id="view-tabla" hidden>
+  <div id="kpis" class="kpis"></div>
+
+  <div class="toolbar">
+    <input id="q" class="search" type="search" placeholder="Buscar cuenta, próximo paso, sector…" autocomplete="off">
+    <button id="btnClear" class="btn ghost" type="button" hidden>Limpiar filtros</button>
+    <span class="spacer"></span>
+    <span id="rowCount" class="count"></span>
+    <button id="btnCols" class="btn" type="button">Columnas</button>
+    <button id="btnDup" class="btn" type="button">Duplicados</button>
+    <button id="btnImport" class="btn" type="button">Importar</button>
+    <button id="btnExport" class="btn" type="button">Exportar</button>
+    <button id="btnNew" class="btn primary" type="button">+ Nueva cuenta</button>
+  </div>
+
+  <div id="grid" class="grid-wrap"></div>
+  <p class="hint">Clic en una celda para editarla · doble clic en la fila para abrir la ficha completa ·
+     el embudo de cada columna filtra como el autofiltro de Excel.</p>
+</main>
+
+<!-- ────────────────────── ficha lateral ────────────────────── -->
+<div id="panelBackdrop" class="backdrop" hidden></div>
+<aside id="panel" class="panel">
+  <header class="panel-head">
+    <h2 id="panelTitle"></h2>
+    <button id="panelClose" class="icon-btn" type="button" title="Cerrar">✕</button>
+  </header>
+  <div id="panelBody" class="panel-body"></div>
+</aside>
+
+<!-- ────────────────────── administración ────────────────────── -->
+<main id="view-admin" hidden>
+  <h1>Administración</h1>
+  <p id="adminMsg" class="msg" hidden></p>
+
+  <section class="card">
+    <h2>Nuevo usuario</h2>
+    <p class="muted">Se crea con una contraseña provisional que tendrá que cambiar al entrar.
+       No se envía ningún correo: cópiala y pásasela por un canal seguro.</p>
+    <div class="grid-form">
+      <label class="fld"><span>Nombre</span><input id="nuName" type="text" placeholder="Jorge"></label>
+      <label class="fld"><span>Correo</span><input id="nuEmail" type="email" placeholder="jorge@zepo.app"></label>
+      <label class="fld"><span>Rol</span><select id="nuRole">
+        <option value="user">Usuario</option><option value="admin">Administrador</option></select></label>
+      <label class="fld"><span>Contraseña provisional</span>
+        <span class="pw"><input id="nuPass" type="text" placeholder="se genera sola si lo dejas vacío">
+          <button id="nuGen" class="pw-eye" type="button" title="Generar">⟳</button></span></label>
+    </div>
+    <button id="nuCreate" class="btn primary" type="button">Crear usuario</button>
+  </section>
+
+  <section class="card">
+    <h2>Usuarios</h2>
+    <div id="adminUsers" class="ulist"></div>
+  </section>
+
+  <section class="card">
+    <h2>Catálogos</h2>
+    <p class="muted">Los valores que ofrecen los desplegables de Región y Sector.
+       Quitar uno no borra el dato de las cuentas que ya lo usan.</p>
+    <h3>Región</h3>
+    <div id="cat_region" class="catlist"></div>
+    <div class="inline-add">
+      <input id="catNew_region" type="text" placeholder="Añadir región…">
+      <button id="catAdd_region" class="btn" type="button">Añadir</button>
+    </div>
+    <h3>Sector</h3>
+    <div id="cat_sector" class="catlist"></div>
+    <div class="inline-add">
+      <input id="catNew_sector" type="text" placeholder="Añadir sector…">
+      <button id="catAdd_sector" class="btn" type="button">Añadir</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Columnas personalizadas</h2>
+    <p class="muted">Campos propios que se suman a los de serie. Una vez creados, cada usuario
+       decide si los muestra desde el botón «Columnas» de la tabla.</p>
+    <div id="adminFields" class="flist"></div>
+    <div class="grid-form">
+      <label class="fld"><span>Nombre de la columna</span><input id="nfLabel" type="text" placeholder="Presupuesto"></label>
+      <label class="fld"><span>Tipo</span><select id="nfType">
+        <option value="text">Texto</option><option value="number">Número</option>
+        <option value="date">Fecha</option><option value="select">Lista de opciones</option></select></label>
+      <label class="fld wide" id="nfOptsWrap" hidden><span>Opciones (separadas por comas)</span>
+        <input id="nfOpts" type="text" placeholder="Alta, Media, Baja"></label>
+    </div>
+    <button id="nfCreate" class="btn primary" type="button">Crear columna</button>
+  </section>
+</main>
+
+<!-- ─────────────────────────── perfil ─────────────────────────── -->
+<main id="view-perfil" hidden>
+  <h1>Tu perfil</h1>
+  <div id="profBody"></div>
+</main>
+
+<!-- ─────────────────────────── diálogos ─────────────────────────── -->
+<dialog id="dlgNew" class="dlg">
+  <h2>Nueva cuenta</h2>
+  <div class="grid-form">
+    <label class="fld wide"><span>Cuenta</span><input id="nName" type="text" autocomplete="off"></label>
+    <p id="nDup" class="msg warn" hidden></p>
+    <label class="fld"><span>Región</span><select id="nRegion"></select></label>
+    <label class="fld"><span>Sector</span><select id="nSector"></select></label>
+    <label class="fld"><span>Owner</span><select id="nOwner"></select></label>
+    <label class="fld"><span>Fecha de seguimiento</span><input id="nDate" type="date"></label>
+    <label class="fld"><span>Deal</span><select id="nDeal">
+      <option value="">—</option><option>SQL</option><option>Demo</option><option>PoC</option>
+      <option>Negotiation</option><option>Verbal Agreement</option><option>Win</option></select></label>
+    <label class="fld wide"><span>Próximo paso</span><input id="nStep" type="text"></label>
+    <label class="fld wide"><span>URL de HubSpot</span><input id="nHs" type="url" placeholder="https://app-eu1.hubspot.com/…"></label>
+  </div>
+  <div class="dlg-acts">
+    <button id="nCancel" class="btn" type="button">Cancelar</button>
+    <button id="nCreate" class="btn primary" type="button">Crear</button>
+  </div>
+</dialog>
+
+<dialog id="dlgImport" class="dlg">
+  <h2>Importar desde Excel o CSV</h2>
+  <div id="impBody"></div>
+  <input id="impFile" type="file" accept=".xlsx,.xls,.csv" hidden>
+</dialog>
+
+<dialog id="dlgDup" class="dlg">
+  <h2>Posibles duplicados</h2>
+  <div id="dupBody"></div>
+  <div class="dlg-acts"><button class="btn" type="button" onclick="this.closest('dialog').close()">Cerrar</button></div>
+</dialog>
+
+<div id="toast" hidden></div>
+
+<!-- SDK de Supabase vendorizado: script clásico, define window.supabase antes de los módulos -->
+<script src="js/vendor/supabase.js"></script>
+<!-- SheetJS para leer y escribir .xlsx en el navegador -->
+<script src="js/vendor/xlsx.full.min.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
