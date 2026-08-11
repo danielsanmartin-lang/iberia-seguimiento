@@ -1,8 +1,8 @@
 // Ficha lateral de una cuenta: todos los campos (incluidos los personalizados)
 // y el historial de notas con autor y fecha.
 import {
-  state, allColumns, getValue, updateField, deleteAccount,
-  loadNotes, addNote, updateNote, deleteNote, createAccount,
+  state, panelFields, getValue, updateField, deleteAccount,
+  notesFor, addNote, updateNote, deleteNote, createAccount,
 } from './store.js';
 import { getProfile, isAdmin } from './auth.js';
 import { escHtml, fmtDateTime, toast, looksLikeDuplicate } from './util.js';
@@ -50,14 +50,26 @@ function fieldControl(acc, col) {
       ${opts.map(([v, l]) => `<option value="${escHtml(v)}"${String(v) === String(val) ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
     </select>`;
   }
-  if (col.key === 'next_step') {
-    return `<textarea id="${id}" data-f="${escHtml(col.key)}" rows="2"
-      placeholder="Qué toca hacer con esta cuenta">${escHtml(val)}</textarea>`;
-  }
-  if (col.key === 'hubspot_url') {
-    return `<input id="${id}" data-f="${escHtml(col.key)}" type="url" placeholder="https://app-eu1.hubspot.com/…" value="${escHtml(val)}">`;
+  if (col.type === 'url') {
+    return `<input id="${id}" data-f="${escHtml(col.key)}" type="url"
+      placeholder="https://app-eu1.hubspot.com/…" value="${escHtml(val)}">`;
   }
   return `<input id="${id}" data-f="${escHtml(col.key)}" type="text" value="${escHtml(val)}">`;
+}
+
+// El historial. Lo comparten la ficha completa y el popup de solo notas.
+function notesBlockHtml() {
+  return `<div class="notes">
+      <div class="notes-head">
+        <h3>Historial</h3>
+        <span class="muted">se guarda con tu nombre y la fecha</span>
+      </div>
+      <div class="note-new">
+        <textarea id="noteBody" rows="3" placeholder="Añadir una entrada…"></textarea>
+        <button id="noteAdd" class="btn primary" type="button">Añadir</button>
+      </div>
+      <div id="noteList" class="note-list"></div>
+    </div>`;
 }
 
 function noteHtml(n, meId) {
@@ -81,27 +93,18 @@ export async function openPanel(id) {
   if (!acc) return;
   currentId = id;
 
-  const cols = allColumns().filter((c) => c.key !== 'name' && c.type !== 'meta');
+  const cols = panelFields();
   const body = document.getElementById('panelBody');
 
   document.getElementById('panelTitle').textContent = acc.name;
+  body.classList.remove('solo-notas');
   body.innerHTML = `
     <label class="fld wide"><span>Cuenta</span>
       <input data-f="name" type="text" value="${escHtml(acc.name)}"></label>
-    ${cols.map((c) => `<label class="fld${c.key === 'next_step' || c.key === 'hubspot_url' ? ' wide' : ''}">
+    ${cols.map((c) => `<label class="fld${c.type === 'url' ? ' wide' : ''}">
         <span>${escHtml(c.label)}</span>${fieldControl(acc, c)}</label>`).join('')}
 
-    <div class="notes">
-      <div class="notes-head">
-        <h3>Historial</h3>
-        <span class="muted">se guarda con tu nombre y la fecha</span>
-      </div>
-      <div class="note-new">
-        <textarea id="noteBody" rows="3" placeholder="Añadir una entrada…"></textarea>
-        <button id="noteAdd" class="btn primary" type="button">Añadir</button>
-      </div>
-      <div id="noteList" class="note-list"><p class="muted">Cargando…</p></div>
-    </div>
+    ${notesBlockHtml()}
 
     <div class="panel-foot">
       <button id="delAcc" class="btn danger ghost" type="button">Borrar cuenta</button>
@@ -132,12 +135,30 @@ export async function openPanel(id) {
     afterChange();
   });
 
-  await renderNotes(id);
+  renderNotes(id);
 }
 
-async function renderNotes(id) {
-  const cached = state.notes.get(id);
-  const notes = cached || (await loadNotes(id)).notes || [];
+// Popup con ÚNICAMENTE el historial: ni región, ni owner, ni fecha, ni el botón
+// de borrar. El título sigue siendo el nombre de la cuenta, que es el mínimo
+// para saber de quién son las notas que estás leyendo.
+export function openNotes(id) {
+  const acc = state.byId.get(id);
+  if (!acc) return;
+  currentId = id;
+
+  document.getElementById('panelTitle').textContent = acc.name;
+  const body = document.getElementById('panelBody');
+  body.classList.add('solo-notas');
+  body.innerHTML = notesBlockHtml();
+
+  document.getElementById('panel').classList.add('open');
+  document.getElementById('panelBackdrop').hidden = false;
+  renderNotes(id);
+}
+
+function renderNotes(id) {
+  // Las notas ya están en memoria desde la carga inicial: no hay espera.
+  const notes = notesFor(id);
   const list = document.getElementById('noteList');
   if (!list) return;
   const meId = getProfile()?.id;
@@ -152,7 +173,7 @@ async function renderNotes(id) {
     const { error } = await addNote(id, text, getProfile());
     if (error) { toast(`No se pudo guardar la nota: ${error.message}`, 'err'); return; }
     ta.value = '';
-    await renderNotes(id);
+    renderNotes(id);
     afterChange();
   };
 
@@ -161,14 +182,14 @@ async function renderNotes(id) {
     if (!confirm('¿Borrar esta entrada del historial?')) return;
     const { error } = await deleteNote(noteId, id);
     if (error) { toast(`No se pudo borrar: ${error.message}`, 'err'); return; }
-    await renderNotes(id);
+    renderNotes(id);
     afterChange();
   }));
 
   list.querySelectorAll('[data-edit-note]').forEach((b) => b.addEventListener('click', () => {
     const art = b.closest('[data-note]');
     const noteId = art.dataset.note;
-    const note = (state.notes.get(id) || []).find((n) => n.id === noteId);
+    const note = notesFor(id).find((n) => n.id === noteId);
     const bodyEl = art.querySelector('.note-body');
     bodyEl.innerHTML = `<textarea class="note-edit" rows="4">${escHtml(note.body)}</textarea>
       <div class="note-edit-acts"><button type="button" data-save>Guardar</button>
@@ -179,7 +200,7 @@ async function renderNotes(id) {
       if (!text) return;
       const { error } = await updateNote(noteId, text);
       if (error) { toast(`No se pudo guardar: ${error.message}`, 'err'); return; }
-      await renderNotes(id);
+      renderNotes(id);
     };
   }));
 }
@@ -226,12 +247,11 @@ function initNewDialog() {
       owner_name: owner ? (owner.full_name || owner.email) : null,
       next_touch: dlg.querySelector('#nDate').value || null,
       deal_stage: dlg.querySelector('#nDeal').value || null,
-      next_step: dlg.querySelector('#nStep').value.trim() || null,
       hubspot_url: dlg.querySelector('#nHs').value.trim() || null,
     });
     if (error) { toast(`No se pudo crear: ${error.message}`, 'err'); return; }
     dlg.close();
-    ['#nStep', '#nHs', '#nDate'].forEach((s) => { dlg.querySelector(s).value = ''; });
+    ['#nHs', '#nDate'].forEach((s) => { dlg.querySelector(s).value = ''; });
     toast(`«${account.name}» creada.`);
     afterChange();
     openPanel(account.id);

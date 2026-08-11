@@ -11,6 +11,10 @@ import { openPanel } from './panel.js';
 let afterChange = () => {};
 
 // Cabeceras que el importador sabe reconocer → campo en BD.
+//
+// "Última nota" se exporta pero NO se importa, y es a propósito: una nota lleva
+// autor y fecha, y crearla desde un Excel firmaría el historial en nombre de
+// quien no la escribió.
 const HEADER_MAP = new Map([
   ['cuenta', 'name'], ['empresa', 'name'], ['name', 'name'], ['account', 'name'],
   ['region', 'region'], ['región', 'region'],
@@ -18,11 +22,10 @@ const HEADER_MAP = new Map([
   ['owner', 'owner_name'], ['propietario', 'owner_name'], ['responsable', 'owner_name'],
   ['fecha', 'next_touch'], ['próximo seguimiento', 'next_touch'], ['next_touch', 'next_touch'],
   ['deal', 'deal_stage'], ['etapa', 'deal_stage'], ['deal_stage', 'deal_stage'],
-  ['próximo paso', 'next_step'], ['proximo paso', 'next_step'], ['next_step', 'next_step'],
   ['hubspot', 'hubspot_url'], ['url hubspot', 'hubspot_url'], ['hubspot_url', 'hubspot_url'],
 ]);
 
-const IMPORTABLE = ['name', 'region', 'sector', 'owner_name', 'next_touch', 'deal_stage', 'next_step', 'hubspot_url'];
+const IMPORTABLE = ['name', 'region', 'sector', 'owner_name', 'next_touch', 'deal_stage', 'hubspot_url'];
 
 function download(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -40,7 +43,8 @@ function stamp() {
 }
 
 function matrix() {
-  const cols = visibleColumns().filter((c) => c.key !== 'notes_count');
+  // El botón de historial no es un dato exportable; la última nota sí.
+  const cols = visibleColumns().filter((c) => c.type !== 'noteslog');
   const head = cols.map((c) => c.label);
   const rows = visibleRows().map((a) => cols.map((c) => {
     const v = cellValue(a, c.key);
@@ -288,7 +292,8 @@ export function initImportExport(onChange) {
   const fileInput = document.getElementById('impFile');
   document.getElementById('btnImport').addEventListener('click', () => {
     document.getElementById('impBody').innerHTML =
-      '<p>Elige un Excel o CSV. Se reconocen las columnas Cuenta, Región, Sector, Owner, Fecha, Deal, Próximo paso y HubSpot; el resto se ignora.</p>' +
+      '<p>Elige un Excel o CSV. Se reconocen las columnas Cuenta, Región, Sector, Owner, Fecha, Deal y HubSpot; el resto se ignora.</p>' +
+      '<p class="muted">«Última nota» se exporta pero no se importa: cada entrada del historial lleva autor y fecha, y traerla desde un Excel la firmaría a nombre de quien no la escribió.</p>' +
       '<div class="dlg-acts"><button class="btn" type="button" onclick="this.closest(\'dialog\').close()">Cancelar</button>' +
       '<button class="btn primary" type="button" id="impPick">Elegir fichero…</button></div>';
     document.getElementById('impPick').onclick = () => fileInput.click();

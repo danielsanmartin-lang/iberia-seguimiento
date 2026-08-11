@@ -8,7 +8,7 @@ import {
   clearFilters, isFiltered, openFilterMenu, closeFilterMenu, cellValue,
 } from './filters.js';
 import { escHtml, fmtDate, fmtDateTime, daysFromToday, toast } from './util.js';
-import { openPanel } from './panel.js';
+import { openPanel, openNotes } from './panel.js';
 
 const HS_ICON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="6" r="2.6"/><circle cx="6" cy="12" r="3"/><circle cx="17" cy="17.5" r="2.6"/><path d="M8.6 10.6 15.6 7M8.7 13.6l6 3.2"/></svg>';
 
@@ -104,15 +104,24 @@ function cellHtml(acc, col) {
   const v = cellValue(acc, col.key);
 
   if (col.key === 'name') {
+    // El icono sustituye a la columna de HubSpot que había antes.
     const link = acc.hubspot_url
       ? `<a class="hs-dot" href="${escHtml(acc.hubspot_url)}" target="_blank" rel="noopener"
             title="Abrir en HubSpot" data-stop>${HS_ICON}</a>` : '';
     return `<span class="gname">${escHtml(acc.name)}</span>${link}`;
   }
-  if (col.type === 'link') {
-    return acc.hubspot_url
-      ? `<a class="hs-chip" href="${escHtml(acc.hubspot_url)}" target="_blank" rel="noopener" data-stop>${HS_ICON} Abrir</a>`
-      : '<span class="muted">—</span>';
+  if (col.type === 'note') {
+    if (!acc.last_note) return '<span class="muted">—</span>';
+    // El texto completo, con sus saltos de línea: la fila crece hasta que cabe.
+    // Autor y fecha van en el title para no meter ruido en la celda.
+    const n = acc.last_note;
+    const firma = `${n.author_name || 'Anónimo'} · ${fmtDateTime(n.created_at)}`;
+    return `<div class="gnote" title="${escHtml(firma)}">${escHtml(n.body)}</div>`;
+  }
+  if (col.type === 'noteslog') {
+    const n = acc.notes_count || 0;
+    return `<button class="btn-notes" type="button" data-notes title="Ver el historial de notas">
+      Notas${n ? `<span class="ncount">${n}</span>` : ''}</button>`;
   }
   if (col.key === 'next_touch') {
     if (!v) return '<span class="muted">—</span>';
@@ -121,9 +130,9 @@ function cellHtml(acc, col) {
     return `<span class="${cls}">${fmtDate(v)}</span>`;
   }
   if (col.key === 'updated_at') return `<span class="muted">${fmtDateTime(v)}</span>`;
-  if (col.key === 'notes_count') {
-    return v ? `<span class="ncount">${v}</span>` : '<span class="muted">—</span>';
-  }
+  // deal_stage ya no es columna, pero las pastillas de KPI siguen usando esta
+  // pastilla de color, así que el estilo se mantiene aquí para los campos
+  // personalizados de tipo lista que quieran el mismo aspecto.
   if (col.key === 'deal_stage' && v) return `<span class="deal d-${escHtml(String(v).replace(/\s+/g, '-'))}">${escHtml(v)}</span>`;
   if (col.key === 'owner_id') {
     if (!v) return '<span class="muted">—</span>';
@@ -142,22 +151,29 @@ export function render() {
   const rows = visibleRows();
   const tpl = cols.map((c) => `minmax(${c.min}px, ${c.width})`).join(' ');
 
-  const head = cols.map((c) => `
-    <div class="gc gh${isFiltered(c.key) ? ' filtered' : ''}" data-k="${escHtml(c.key)}">
-      <button class="gh-sort" type="button" data-sort="${escHtml(c.key)}">
-        ${escHtml(c.label)}${sort.key === c.key ? `<i class="arr">${sort.dir > 0 ? '▲' : '▼'}</i>` : ''}
-      </button>
+  const head = cols.map((c) => {
+    const rotulo = c.noSort
+      ? `<span class="gh-sort static">${escHtml(c.label)}</span>`
+      : `<button class="gh-sort" type="button" data-sort="${escHtml(c.key)}">
+           ${escHtml(c.label)}${sort.key === c.key ? `<i class="arr">${sort.dir > 0 ? '▲' : '▼'}</i>` : ''}
+         </button>`;
+    // Sin embudo en las columnas de texto libre: listar 250 valores distintos
+    // no es un filtro, es un índice.
+    const embudo = c.noFilter ? '' : `
       <button class="gh-filter" type="button" data-filter="${escHtml(c.key)}" title="Filtrar">
         <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4"
              stroke-linecap="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
-      </button>
-    </div>`).join('');
+      </button>`;
+    return `<div class="gc gh${isFiltered(c.key) ? ' filtered' : ''}" data-k="${escHtml(c.key)}">${rotulo}${embudo}</div>`;
+  }).join('');
 
   const body = rows.map((a) => {
     const d = a.next_touch ? daysFromToday(a.next_touch) : null;
     const cls = d !== null && d < 0 ? ' overdue' : '';
-    return `<div class="grow${cls}" data-id="${a.id}">${cols.map((c) => `
-      <div class="gc${EDITABLE_TYPES.has(c.type) ? ' editable' : ''}" data-k="${escHtml(c.key)}">${cellHtml(a, c)}</div>`).join('')}</div>`;
+    return `<div class="grow${cls}" data-id="${a.id}">${cols.map((c) => {
+      const extra = (EDITABLE_TYPES.has(c.type) ? ' editable' : '') + (c.type === 'note' ? ' gc-note' : '');
+      return `<div class="gc${extra}" data-k="${escHtml(c.key)}">${cellHtml(a, c)}</div>`;
+    }).join('')}</div>`;
   }).join('');
 
   document.getElementById('grid').innerHTML = `
@@ -179,6 +195,13 @@ function closeEditor(cellEl, acc, col) {
   editing = null;
   cellEl.classList.remove('editing');
   cellEl.innerHTML = cellHtml(acc, col);
+}
+
+// Cierra el editor abierto descartando lo tecleado. Lo necesita el doble clic
+// sobre el nombre: el primer clic del par ya ha abierto el renombrado y, si no
+// se retira, el input se queda montado detrás de la ficha.
+export function cancelEdit() {
+  editing?.cancel?.();
 }
 
 function startEdit(cellEl, acc, col) {
@@ -242,8 +265,10 @@ function startEdit(cellEl, acc, col) {
   function cancel() {
     if (done) return;
     done = true;
+    ctrl.removeEventListener('blur', commit);   // el blur no debe guardar tras cancelar
     closeEditor(cellEl, acc, col);
   }
+  editing.cancel = cancel;
 
   ctrl.addEventListener('blur', commit);
   ctrl.addEventListener('keydown', (e) => {
@@ -346,17 +371,25 @@ export function initGrid() {
     if (!cell || !row) return;
     const acc = state.byId.get(row.dataset.id);
     if (!acc) return;
+
+    // Un solo clic en «Notas» abre el historial. Va antes que la edición en
+    // celda para que el botón no dispare además el editor.
+    if (e.target.closest('[data-notes]')) { openNotes(acc.id); return; }
+
     const col = allColumns().find((c) => c.key === cell.dataset.k);
     if (!col) return;
 
     if (EDITABLE_TYPES.has(col.type)) startEdit(cell, acc, col);
   });
 
-  // Doble clic en cualquier parte de la fila (o clic en una celda no editable):
-  // abre la ficha completa.
+  // La ficha se abre solo con doble clic sobre el nombre de la cuenta: en el
+  // resto de celdas el doble clic es parte de editar, no de navegar.
   grid.addEventListener('dblclick', (e) => {
+    const cell = e.target.closest('.gc');
     const row = e.target.closest('.grow:not(.ghead)');
-    if (row) openPanel(row.dataset.id);
+    if (!cell || !row || cell.dataset.k !== 'name') return;
+    cancelEdit();   // el primer clic del par abrió el renombrado
+    openPanel(row.dataset.id);
   });
 
   document.getElementById('q').addEventListener('input', (e) => {

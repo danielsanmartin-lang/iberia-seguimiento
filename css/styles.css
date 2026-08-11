@@ -171,10 +171,16 @@ main{padding:18px;max-width:100%}
   position:sticky;top:0;z-index:5;background:var(--surface2);
   border-bottom:1px solid var(--line2);
 }
+/* Alineación superior: la celda de la última nota puede ocupar varias líneas y
+   con centrado vertical el resto de valores quedaría flotando en el medio. */
 .gc{
-  padding:7px 10px;font-size:12.5px;color:var(--ink2);min-width:0;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:6px;
+  padding:7px 10px;font-size:12.5px;line-height:1.45;color:var(--ink2);min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  display:flex;align-items:flex-start;gap:6px;
 }
+/* La nota se lee entera: la fila crece hasta que cabe. */
+.gc-note{white-space:normal;overflow:visible;text-overflow:clip}
+.gnote{white-space:pre-wrap;word-break:break-word;min-width:0}
 .gc.editable{cursor:text}
 .grow:not(.ghead) .gc.editable:hover{box-shadow:inset 0 0 0 1px var(--teal-bd);border-radius:4px}
 .gc.editing{padding:2px 4px;overflow:visible}
@@ -185,6 +191,9 @@ main{padding:18px;max-width:100%}
   text-transform:uppercase;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .gh-sort:hover{color:var(--teal-dk)}
+/* Cabecera sin orden (el histórico de notas no se ordena por nada). */
+.gh-sort.static{cursor:default}
+.gh-sort.static:hover{color:var(--ink3)}
 .gh-sort .arr{font-style:normal;font-size:8px;margin-left:3px;color:var(--teal)}
 .gh-filter{
   flex:none;width:22px;height:22px;margin-right:5px;display:grid;place-items:center;
@@ -203,6 +212,13 @@ main{padding:18px;max-width:100%}
 .due.today{color:var(--amber-dk);font-weight:700}
 .ncount{background:var(--line);color:var(--ink2);border-radius:999px;padding:1px 7px;
   font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+.btn-notes{
+  display:inline-flex;align-items:center;gap:5px;
+  border:1px solid var(--line2);background:var(--surface);color:var(--ink2);
+  font:inherit;font-size:12px;font-weight:600;padding:3px 9px;border-radius:var(--rs);cursor:pointer;
+}
+.btn-notes:hover{border-color:var(--teal);background:var(--teal-bg);color:var(--teal-dk)}
+.btn-notes .ncount{background:var(--teal-bd);color:var(--teal-dk);padding:0 6px}
 .owner-orphan{color:var(--ink3);font-style:italic}
 .hs-dot,.hs-chip{color:var(--amber-dk);display:inline-flex;align-items:center;gap:4px;flex:none}
 .hs-dot:hover,.hs-chip:hover{color:var(--teal-dk);text-decoration:none}
@@ -267,6 +283,9 @@ main{padding:18px;max-width:100%}
 .panel-foot{grid-column:1/-1;border-top:1px solid var(--line);padding-top:14px}
 
 .notes{grid-column:1/-1;border-top:1px solid var(--line);padding-top:14px}
+/* Popup de solo historial: sin campos arriba, la línea divisoria sobra. */
+.panel-body.solo-notas{grid-template-columns:1fr}
+.panel-body.solo-notas .notes{border-top:0;padding-top:0}
 .notes-head{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
 .notes-head h3{margin:0}
 .notes-head .muted{font-size:11px}

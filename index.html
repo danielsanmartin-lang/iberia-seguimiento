@@ -66,7 +66,7 @@
   <div id="kpis" class="kpis"></div>
 
   <div class="toolbar">
-    <input id="q" class="search" type="search" placeholder="Buscar cuenta, próximo paso, sector…" autocomplete="off">
+    <input id="q" class="search" type="search" placeholder="Buscar cuenta, sector, o dentro de las notas…" autocomplete="off">
     <button id="btnClear" class="btn ghost" type="button" hidden>Limpiar filtros</button>
     <span class="spacer"></span>
     <span id="rowCount" class="count"></span>
@@ -78,8 +78,8 @@
   </div>
 
   <div id="grid" class="grid-wrap"></div>
-  <p class="hint">Clic en una celda para editarla · doble clic en la fila para abrir la ficha completa ·
-     el embudo de cada columna filtra como el autofiltro de Excel.</p>
+  <p class="hint">Clic en una celda para editarla · doble clic en el <b>nombre</b> para abrir la ficha ·
+     botón <b>Notas</b> para el historial completo · el embudo de cada columna filtra como el autofiltro de Excel.</p>
 </main>
 
 <!-- ────────────────────── ficha lateral ────────────────────── -->
@@ -172,7 +172,6 @@
     <label class="fld"><span>Deal</span><select id="nDeal">
       <option value="">—</option><option>SQL</option><option>Demo</option><option>PoC</option>
       <option>Negotiation</option><option>Verbal Agreement</option><option>Win</option></select></label>
-    <label class="fld wide"><span>Próximo paso</span><input id="nStep" type="text"></label>
     <label class="fld wide"><span>URL de HubSpot</span><input id="nHs" type="url" placeholder="https://app-eu1.hubspot.com/…"></label>
   </div>
   <div class="dlg-acts">
