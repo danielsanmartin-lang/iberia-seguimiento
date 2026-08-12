@@ -221,6 +221,14 @@ function initNewDialog() {
       state.profiles.filter((p) => p.is_active)
         .map((p) => `<option value="${p.id}">${escHtml(p.full_name || p.email)}</option>`).join('');
     dlg.querySelector('#nOwner').value = getProfile()?.id || '';
+    // Las columnas personalizadas (Tipo de empresa…) se pintan con el mismo
+    // control que la ficha, así que la que cree el admin mañana aparece aquí sin
+    // tocar código. La cuenta de pega basta: getValue devuelve null y el control
+    // sale vacío. Se repinta en cada apertura, así que nunca arrastra lo anterior.
+    dlg.querySelector('#nCustom').innerHTML = panelFields()
+      .filter((c) => c.custom)
+      .map((c) => `<label class="fld"><span>${escHtml(c.label)}</span>
+        ${fieldControl({ custom: {} }, c)}</label>`).join('');
     dlg.querySelector('#nDup').hidden = true;
     dlg.showModal();
     dlg.querySelector('#nName').focus();
@@ -243,14 +251,28 @@ function initNewDialog() {
     if (!name) { toast('Pon un nombre de cuenta.', 'err'); return; }
     const ownerId = dlg.querySelector('#nOwner').value || null;
     const owner = state.profiles.find((p) => p.id === ownerId);
-    const { account, error } = await createAccount({
+
+    // Los personalizados viajan juntos en la columna jsonb `custom`. Se recogen
+    // por su data-f y dentro del diálogo: el mismo control puede estar montado en
+    // la ficha lateral si estaba abierta, con lo que el id se repite en la página.
+    // Solo los que traen valor: una clave con cadena vacía no es "sin rellenar",
+    // es un dato que luego sale como valor fuera de catálogo.
+    const custom = {};
+    dlg.querySelectorAll('[data-f^="custom."]').forEach((el) => {
+      if (el.value) custom[el.dataset.f.slice(7)] = el.value;
+    });
+
+    const fields = {
       name,
       region: dlg.querySelector('#nRegion').value || null,
       sector: dlg.querySelector('#nSector').value || null,
       owner_id: ownerId,
       owner_name: owner ? (owner.full_name || owner.email) : null,
       hubspot_url: dlg.querySelector('#nHs').value.trim() || null,
-    });
+    };
+    if (Object.keys(custom).length) fields.custom = custom;
+
+    const { account, error } = await createAccount(fields);
     // El diálogo no se cierra si falla: los datos escritos siguen dentro.
     if (error) { await writeFailed(error, 'crear la cuenta'); return; }
     dlg.close();
