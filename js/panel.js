@@ -5,6 +5,7 @@ import {
   notesFor, addNote, updateNote, deleteNote, createAccount,
 } from './store.js';
 import { getProfile, isAdmin } from './auth.js';
+import { writeFailed } from './net.js';
 import { escHtml, fmtDateTime, toast, looksLikeDuplicate } from './util.js';
 
 let currentId = null;
@@ -120,7 +121,9 @@ export function openPanel(id) {
       const next = el.value.trim() === '' ? null : el.value.trim();
       if (key === 'name' && !next) { toast('La cuenta necesita un nombre.', 'err'); el.value = acc.name; return; }
       const { error } = await updateField(id, key, next);
-      if (error) { toast(`No se pudo guardar: ${error.message}`, 'err'); return; }
+      // A propósito no se restaura el valor anterior en el campo: lo que el
+      // usuario escribió se queda a la vista para poder reintentar.
+      if (error) { await writeFailed(error, 'guardar'); return; }
       if (key === 'name') document.getElementById('panelTitle').textContent = next;
       afterChange();
     });
@@ -129,7 +132,7 @@ export function openPanel(id) {
   document.getElementById('delAcc').addEventListener('click', async () => {
     if (!confirm(`¿Borrar «${acc.name}» y todo su historial? No se puede deshacer.`)) return;
     const { error } = await deleteAccount(id);
-    if (error) { toast(`No se pudo borrar: ${error.message}`, 'err'); return; }
+    if (error) { await writeFailed(error, 'borrar'); return; }
     closePanel();
     toast('Cuenta borrada.');
     afterChange();
@@ -169,7 +172,9 @@ function renderNotes(id) {
     const text = ta.value.trim();
     if (!text) return;
     const { error } = await addNote(id, text, getProfile());
-    if (error) { toast(`No se pudo guardar la nota: ${error.message}`, 'err'); return; }
+    // El textarea no se vacía si ha fallado: el texto sigue ahí y basta con
+    // volver a pulsar «Añadir» cuando se recupere la conexión.
+    if (error) { await writeFailed(error, 'guardar la nota'); return; }
     ta.value = '';
     renderNotes(id);
     afterChange();
@@ -179,7 +184,7 @@ function renderNotes(id) {
     const noteId = b.closest('[data-note]').dataset.note;
     if (!confirm('¿Borrar esta entrada del historial?')) return;
     const { error } = await deleteNote(noteId, id);
-    if (error) { toast(`No se pudo borrar: ${error.message}`, 'err'); return; }
+    if (error) { await writeFailed(error, 'borrar'); return; }
     renderNotes(id);
     afterChange();
   }));
@@ -197,7 +202,8 @@ function renderNotes(id) {
       const text = bodyEl.querySelector('textarea').value.trim();
       if (!text) return;
       const { error } = await updateNote(noteId, text);
-      if (error) { toast(`No se pudo guardar: ${error.message}`, 'err'); return; }
+      // Igual que en el alta: el editor de la nota se queda abierto con el texto.
+      if (error) { await writeFailed(error, 'guardar'); return; }
       renderNotes(id);
     };
   }));
@@ -245,7 +251,8 @@ function initNewDialog() {
       owner_name: owner ? (owner.full_name || owner.email) : null,
       hubspot_url: dlg.querySelector('#nHs').value.trim() || null,
     });
-    if (error) { toast(`No se pudo crear: ${error.message}`, 'err'); return; }
+    // El diálogo no se cierra si falla: los datos escritos siguen dentro.
+    if (error) { await writeFailed(error, 'crear la cuenta'); return; }
     dlg.close();
     dlg.querySelector('#nHs').value = '';
     toast(`«${account.name}» creada.`);

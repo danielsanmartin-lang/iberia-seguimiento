@@ -124,6 +124,19 @@ textarea{resize:vertical}
 #topbar nav a:hover{background:var(--teal-bg);color:var(--teal-dk);text-decoration:none}
 #userLink{color:var(--ink3) !important;font-weight:500 !important}
 
+/* Estado de la conexión. Solo aparece cuando algo va mal: el caso bueno no
+   necesita un cartel que lo diga, y el malo no puede pasar desapercibido. */
+.netstate{
+  display:inline-flex;align-items:center;gap:6px;flex:none;margin-right:6px;
+  padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;
+  border:1px solid transparent;cursor:default;
+}
+.netstate i{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.netstate[data-state="down"]{background:var(--red-bg);border-color:var(--red-bd);color:var(--red-dk)}
+.netstate[data-state="down"] i{animation:pulse 1.4s ease-in-out infinite}
+.netstate[data-state="stale"]{background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber-dk)}
+@keyframes pulse{50%{opacity:.25}}
+
 main{padding:18px;max-width:100%}
 #view-admin,#view-perfil{max-width:900px;margin:0 auto}
 
@@ -183,6 +196,12 @@ main{padding:18px;max-width:100%}
 .gc-note{white-space:normal;overflow:visible;text-overflow:clip}
 .gnote{white-space:pre-wrap;word-break:break-word;min-width:0}
 .gc.editable{cursor:text}
+/* Celda con una edición que no llegó a guardarse. Muestra el valor de la base de
+   datos (lo que no está guardado no puede aparentar estarlo) y avisa con el
+   borde: lo tecleado sigue guardado en memoria y un clic reabre el editor con
+   ese texto. El title dice qué se quedó sin guardar. */
+.gc.pending{box-shadow:inset 3px 0 0 var(--amber),inset 0 0 0 1px var(--amber-bd);
+  border-radius:4px;background:var(--amber-bg)}
 .grow:not(.ghead) .gc.editable:hover{box-shadow:inset 0 0 0 1px var(--teal-bd);border-radius:4px}
 .gc.editing{padding:2px 4px;overflow:visible}
 .gh{padding:0;position:relative;cursor:grab;user-select:none}
@@ -389,4 +408,8 @@ main{padding:18px;max-width:100%}
   #topbar .brand.small strong{display:none}
   #userLink span{display:inline-block;max-width:74px;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+  /* El indicador de conexión se queda en el punto de color: el texto no cabe,
+     pero el aviso no puede desaparecer. La explicación sigue en el title. */
+  .netstate span{display:none}
+  .netstate{padding:6px;margin-right:2px}
 }

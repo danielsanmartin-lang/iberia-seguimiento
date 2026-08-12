@@ -3,6 +3,7 @@
 import { sb } from './supabaseClient.js';
 import { getProfile, changePassword, loadProfile } from './auth.js';
 import { state } from './store.js';
+import { writeFailed, withStatus } from './net.js';
 import { escHtml, toast } from './util.js';
 
 export function renderProfile() {
@@ -35,8 +36,8 @@ export function renderProfile() {
   document.getElementById('pfSave').addEventListener('click', async () => {
     const name = document.getElementById('pfName').value.trim();
     if (!name) { toast('El nombre no puede quedar vacío.', 'err'); return; }
-    const { error } = await sb.from('profiles').update({ full_name: name }).eq('id', p.id);
-    if (error) { toast(`No se pudo guardar: ${error.message}`, 'err'); return; }
+    const { error, status } = await sb.from('profiles').update({ full_name: name }).eq('id', p.id);
+    if (error) { await writeFailed(withStatus(error, status), 'guardar el nombre'); return; }
     await loadProfile();
     document.getElementById('userName').textContent = name;
     toast('Nombre actualizado.');

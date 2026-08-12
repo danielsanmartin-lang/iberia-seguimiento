@@ -8,11 +8,25 @@ import {
   clearFilters, isFiltered, openFilterMenu, closeFilterMenu, cellValue,
 } from './filters.js';
 import { escHtml, fmtDate, fmtDateTime, daysFromToday, toast } from './util.js';
+import { writeFailed } from './net.js';
 import { openPanel, openNotes } from './panel.js';
 
 const HS_ICON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="6" r="2.6"/><circle cx="6" cy="12" r="3"/><circle cx="17" cy="17.5" r="2.6"/><path d="M8.6 10.6 15.6 7M8.7 13.6l6 3.2"/></svg>';
 
 let editing = null;   // { id, key } de la celda abierta
+let pendingRender = false;   // hubo cambios que no se pintaron por estar editando
+
+// Celdas cuya última edición no llegó a la base de datos. La celda sigue
+// mostrando el valor de la base de datos (lo que no está guardado no puede
+// aparentar estarlo), pero se marca en ámbar y guarda lo tecleado para que un
+// clic reabra el editor con ese texto. Antes se cerraba el editor sin más y el
+// cambio se perdía sin dejar rastro.
+//
+// Esto NO es una cola de reintentos: no sobrevive a recargar la página, y el
+// reintento lo decide el usuario.
+const pending = new Map();   // `${id}:${key}` -> { value, label }
+const pkey = (id, key) => `${id}:${key}`;
+const pendingTip = (p) => `Sin guardar: «${p.label || '(vacío)'}». Clic para reintentar.`;
 
 // ─────────────────── preferencias de columnas ───────────────────
 
@@ -167,8 +181,12 @@ export function render() {
     const d = a.next_touch ? daysFromToday(a.next_touch) : null;
     const cls = d !== null && d < 0 ? ' overdue' : '';
     return `<div class="grow${cls}" data-id="${a.id}">${cols.map((c) => {
-      const extra = (EDITABLE_TYPES.has(c.type) ? ' editable' : '') + (c.type === 'note' ? ' gc-note' : '');
-      return `<div class="gc${extra}" data-k="${escHtml(c.key)}">${cellHtml(a, c)}</div>`;
+      const p = pending.get(pkey(a.id, c.key));
+      const extra = (EDITABLE_TYPES.has(c.type) ? ' editable' : '')
+        + (c.type === 'note' ? ' gc-note' : '')
+        + (p ? ' pending' : '');
+      const tip = p ? ` title="${escHtml(pendingTip(p))}"` : '';
+      return `<div class="gc${extra}" data-k="${escHtml(c.key)}"${tip}>${cellHtml(a, c)}</div>`;
     }).join('')}</div>`;
   }).join('');
 
@@ -190,7 +208,17 @@ export function render() {
 function closeEditor(cellEl, acc, col) {
   editing = null;
   cellEl.classList.remove('editing');
+
+  const p = pending.get(pkey(acc.id, col.key));
+  cellEl.classList.toggle('pending', !!p);
+  if (p) cellEl.title = pendingTip(p); else cellEl.removeAttribute('title');
   cellEl.innerHTML = cellHtml(acc, col);
+
+  // Mientras había un editor abierto se ignoraron los avisos de cambio (Realtime,
+  // resincronización) para no quitarle el foco al usuario a mitad de escribir.
+  // Ahora que ha cerrado, se aplican: si no, la fila se quedaba con datos viejos
+  // hasta el siguiente cambio que sí pillara la tabla libre.
+  if (pendingRender) { pendingRender = false; render(); }
 }
 
 // Cierra el editor abierto descartando lo tecleado. Lo necesita el doble clic
@@ -205,7 +233,12 @@ function startEdit(cellEl, acc, col) {
   editing = { id: acc.id, key: col.key };
   cellEl.classList.add('editing');
 
-  const raw = col.key === 'owner_id' ? (acc.owner_id || '') : (getValue(acc, col.key) ?? '');
+  // Si la última edición de esta celda no llegó a guardarse, el editor se abre
+  // con lo que el usuario había escrito, no con lo que hay en la base de datos:
+  // reintentar tiene que ser un clic, no volver a teclearlo.
+  const stored = col.key === 'owner_id' ? (acc.owner_id || '') : (getValue(acc, col.key) ?? '');
+  const stuck = pending.get(pkey(acc.id, col.key));
+  const raw = stuck ? (stuck.value ?? '') : stored;
   let ctrl;
 
   if (col.type === 'date') {
@@ -245,18 +278,43 @@ function startEdit(cellEl, acc, col) {
   let done = false;
   async function commit() {
     if (done) return;
-    done = true;
     const next = ctrl.value === '' ? null : ctrl.value;
     const before = col.key === 'owner_id' ? (acc.owner_id || null) : (getValue(acc, col.key) ?? null);
-    if (String(next ?? '') === String(before ?? '')) { closeEditor(cellEl, acc, col); return; }
+    const k = pkey(acc.id, col.key);
+    done = true;
+
+    if (String(next ?? '') === String(before ?? '')) {
+      // La base de datos ya dice lo que el usuario quería: si quedaba la marca de
+      // un intento anterior que no llegó, sobra.
+      pending.delete(k);
+      closeEditor(cellEl, acc, col);
+      return;
+    }
     if (col.key === 'name' && !next) {
       toast('La cuenta necesita un nombre.', 'err');
       closeEditor(cellEl, acc, col);
       return;
     }
-    closeEditor(cellEl, acc, col);
+
+    // La etiqueta del desplegable, no el valor: en Owner el valor es un UUID y
+    // «Sin guardar: 9f3c-…» no le dice nada a nadie.
+    const label = ctrl.tagName === 'SELECT'
+      ? (ctrl.selectedOptions[0]?.textContent.trim() || '')
+      : (next ?? '');
+    ctrl.disabled = true;   // guardando: ni doble envío ni seguir tecleando
+
     const { error } = await updateField(acc.id, col.key, next);
-    if (error) toast(`No se pudo guardar: ${error.message}`, 'err');
+    if (error) {
+      // updateField ya ha devuelto la celda a su valor anterior. Lo que el
+      // usuario escribió se queda aquí para que pueda reintentarlo con un clic.
+      pending.set(k, { value: next, label });
+      closeEditor(cellEl, acc, col);
+      await writeFailed(error, 'guardar');
+      return;
+    }
+    pending.delete(k);
+    pendingRender = true;   // closeEditor repinta la tabla entera
+    closeEditor(cellEl, acc, col);
   }
   function cancel() {
     if (done) return;
@@ -520,9 +578,11 @@ export function initGrid() {
 
   // Repintar cuando algo cambie por debajo (Realtime, guardados, notas…),
   // salvo mientras se está editando una celda: no se le puede quitar el foco
-  // al usuario a mitad de escribir.
-  onChange((reason) => {
-    if (editing && reason !== 'load') return;
+  // al usuario a mitad de escribir. El repintado no se descarta, se aplaza:
+  // closeEditor lo aplica al cerrar. Antes, un cambio llegado por Realtime
+  // mientras alguien editaba se perdía y la fila se quedaba con el dato viejo.
+  onChange(() => {
+    if (editing) { pendingRender = true; return; }
     render();
   });
 

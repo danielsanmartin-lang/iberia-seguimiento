@@ -8,6 +8,17 @@
 // de uno tiene que aparecer en la pantalla de los otros sin recargar.
 import { sb } from './supabaseClient.js';
 import { GRID_COLUMNS, PANEL_FIELDS } from './data.js';
+import {
+  realtimeStarted, realtimeStopped, noteRealtimeStatus, withStatus,
+} from './net.js';
+
+// Un DELETE bloqueado por RLS no da error: borra cero filas y responde que todo
+// ha ido bien. Sin esto, la app se cree el borrado, lo quita de la pantalla y la
+// fila sigue en la base de datos hasta que alguien recarga.
+const NO_ROW = () => ({
+  message: 'No se ha borrado nada: la fila ya no existe o no tienes permiso.',
+  code: 'APP_NO_ROW',
+});
 
 export const state = {
   accounts: [],
@@ -95,8 +106,8 @@ export async function loadAll() {
     sb.from('catalog_options').select('kind, value, position').order('position'),
     sb.from('field_defs').select('*').order('position'),
   ]);
-  if (accs.error) throw accs.error;
-  if (notes.error) throw notes.error;
+  if (accs.error) throw withStatus(accs.error, accs.status);
+  if (notes.error) throw withStatus(notes.error, notes.status);
 
   state.accounts = (accs.data || []).map((a) => ({ ...a, custom: a.custom || {} }));
   index();
@@ -148,11 +159,11 @@ export async function updateField(id, key, value) {
   Object.assign(acc, patch);
   emit('optimistic');
 
-  const { data, error } = await sb.from('accounts').update(patch).eq('id', id).select().single();
+  const { data, error, status } = await sb.from('accounts').update(patch).eq('id', id).select().single();
   if (error) {
     Object.assign(acc, prev);
     emit('revert');
-    return { error };
+    return { error: withStatus(error, status) };
   }
   // La respuesta no trae los campos derivados de las notas: se preservan.
   Object.assign(acc, data, {
@@ -165,8 +176,8 @@ export async function updateField(id, key, value) {
 }
 
 export async function createAccount(fields) {
-  const { data, error } = await sb.from('accounts').insert(fields).select().single();
-  if (error) return { error };
+  const { data, error, status } = await sb.from('accounts').insert(fields).select().single();
+  if (error) return { error: withStatus(error, status) };
   const acc = { ...data, custom: data.custom || {}, notes_count: 0, last_note: null };
   state.accounts.push(acc);
   index();
@@ -176,8 +187,8 @@ export async function createAccount(fields) {
 
 // Alta masiva (importación). Devuelve las filas creadas.
 export async function createAccounts(rows) {
-  const { data, error } = await sb.from('accounts').insert(rows).select();
-  if (error) return { error };
+  const { data, error, status } = await sb.from('accounts').insert(rows).select();
+  if (error) return { error: withStatus(error, status) };
   const created = (data || []).map((d) => ({
     ...d, custom: d.custom || {}, notes_count: 0, last_note: null,
   }));
@@ -188,8 +199,11 @@ export async function createAccounts(rows) {
 }
 
 export async function deleteAccount(id) {
-  const { error } = await sb.from('accounts').delete().eq('id', id);
-  if (error) return { error };
+  // El .select() no es decorativo: es la única forma de saber si el DELETE ha
+  // borrado algo de verdad (ver NO_ROW).
+  const { data, error, status } = await sb.from('accounts').delete().eq('id', id).select('id');
+  if (error) return { error: withStatus(error, status) };
+  if (!data || !data.length) return { error: NO_ROW() };
   state.accounts = state.accounts.filter((a) => a.id !== id);
   state.notes.delete(id);
   index();
@@ -202,13 +216,13 @@ export async function deleteAccount(id) {
 // mantienen la lista local en orden (la más reciente primero).
 
 export async function addNote(accountId, body, author) {
-  const { data, error } = await sb.from('account_notes').insert({
+  const { data, error, status } = await sb.from('account_notes').insert({
     account_id: accountId,
     body,
     author_id: author.id,
     author_name: author.full_name || author.email,
   }).select().single();
-  if (error) return { error };
+  if (error) return { error: withStatus(error, status) };
   state.notes.set(accountId, [data, ...notesFor(accountId)]);
   resyncNotes(accountId);
   emit('note');
@@ -216,8 +230,8 @@ export async function addNote(accountId, body, author) {
 }
 
 export async function updateNote(noteId, body) {
-  const { data, error } = await sb.from('account_notes').update({ body }).eq('id', noteId).select().single();
-  if (error) return { error };
+  const { data, error, status } = await sb.from('account_notes').update({ body }).eq('id', noteId).select().single();
+  if (error) return { error: withStatus(error, status) };
   state.notes.set(data.account_id, notesFor(data.account_id).map((n) => (n.id === noteId ? data : n)));
   resyncNotes(data.account_id);
   emit('note');
@@ -225,8 +239,9 @@ export async function updateNote(noteId, body) {
 }
 
 export async function deleteNote(noteId, accountId) {
-  const { error } = await sb.from('account_notes').delete().eq('id', noteId);
-  if (error) return { error };
+  const { data, error, status } = await sb.from('account_notes').delete().eq('id', noteId).select('id');
+  if (error) return { error: withStatus(error, status) };
+  if (!data || !data.length) return { error: NO_ROW() };
   state.notes.set(accountId, notesFor(accountId).filter((n) => n.id !== noteId));
   resyncNotes(accountId);
   emit('note');
@@ -237,33 +252,36 @@ export async function deleteNote(noteId, accountId) {
 
 export async function addCatalogOption(kind, value) {
   const pos = state.catalogs[kind].length;
-  const { error } = await sb.from('catalog_options').insert({ kind, value, position: pos });
-  if (error) return { error };
+  const { error, status } = await sb.from('catalog_options').insert({ kind, value, position: pos });
+  if (error) return { error: withStatus(error, status) };
   state.catalogs[kind] = [...state.catalogs[kind], value].sort((a, b) => a.localeCompare(b, 'es'));
   emit('catalog');
   return {};
 }
 
 export async function removeCatalogOption(kind, value) {
-  const { error } = await sb.from('catalog_options').delete().eq('kind', kind).eq('value', value);
-  if (error) return { error };
+  const { data, error, status } = await sb.from('catalog_options')
+    .delete().eq('kind', kind).eq('value', value).select('value');
+  if (error) return { error: withStatus(error, status) };
+  if (!data || !data.length) return { error: NO_ROW() };
   state.catalogs[kind] = state.catalogs[kind].filter((v) => v !== value);
   emit('catalog');
   return {};
 }
 
 export async function addFieldDef(def) {
-  const { data, error } = await sb.from('field_defs')
+  const { data, error, status } = await sb.from('field_defs')
     .insert({ ...def, position: state.fields.length }).select().single();
-  if (error) return { error };
+  if (error) return { error: withStatus(error, status) };
   state.fields.push(data);
   emit('fields');
   return { field: data };
 }
 
 export async function removeFieldDef(id) {
-  const { error } = await sb.from('field_defs').delete().eq('id', id);
-  if (error) return { error };
+  const { data, error, status } = await sb.from('field_defs').delete().eq('id', id).select('id');
+  if (error) return { error: withStatus(error, status) };
+  if (!data || !data.length) return { error: NO_ROW() };
   state.fields = state.fields.filter((f) => f.id !== id);
   emit('fields');
   return {};
@@ -274,6 +292,7 @@ let channel = null;
 
 export function startRealtime() {
   if (channel) return;
+  realtimeStarted();   // antes de suscribirse: el primer estado ya cuenta
   channel = sb.channel('iberia-seguimiento')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'accounts' }, (payload) => {
       if (payload.eventType === 'DELETE') {
@@ -308,11 +327,14 @@ export function startRealtime() {
       resyncNotes(accId);
       emit('realtime');
     })
-    .subscribe();
+    // El estado del canal se reporta a net.js: si esto se cae, los cambios de
+    // los demás dejan de llegar y la tabla no tiene forma de saberlo.
+    .subscribe((status) => noteRealtimeStatus(status));
 }
 
 export function stopRealtime() {
   if (!channel) return;
+  realtimeStopped();
   sb.removeChannel(channel);
   channel = null;
 }

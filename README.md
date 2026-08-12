@@ -78,6 +78,35 @@ canal seguro. La sesión se cierra sola a los 30 minutos de inactividad.
 Los tres usuarios ven y editan **todo**. La única diferencia por rol es el panel
 de administración.
 
+## Qué pasa si se cae la conexión (o la sesión)
+
+**No hay cola offline.** Lo que no llega a Supabase no se guarda, y no se sube
+solo más tarde. La app está construida para que eso nunca pase en silencio:
+
+- **Aviso en la cabecera.** «Sin conexión» (rojo) cuando la base de datos no
+  responde; «Sin sincronizar» (ámbar) cuando lo que se ha caído es Realtime y
+  puede que no estés viendo los cambios de los demás. Si no hay aviso, no hay
+  problema.
+- **Lo escrito no se pierde de vista.** Una celda que no se ha podido guardar se
+  queda marcada en ámbar mostrando el valor que hay en la base de datos —lo que
+  no está guardado no puede aparentar estarlo— y un clic reabre el editor con lo
+  que habías escrito. Las notas y el alta de cuentas conservan el texto en su
+  formulario. Nada de esto sobrevive a recargar la página: el reintento es
+  manual y hay que hacerlo antes de cerrar.
+- **Recarga al recuperar la conexión.** Realtime no reproduce los eventos que se
+  perdieron mientras estaba caído, así que al volver se recargan los datos. Sin
+  eso la pantalla se quedaba con datos viejos sin avisar de nada.
+- **Sesión muerta ≠ sin red.** Si el token ha caducado o el usuario ha sido
+  desactivado, seguir en la app solo sirve para escribir al vacío: se cierra la
+  sesión y se explica por qué en la pantalla de acceso. Antes la app te dejaba
+  dentro, aparentemente normal, devolviendo un `permission denied for function
+  is_member` por cada cambio.
+
+La distinción se hace con el status que devuelve PostgREST (`0` = la petición no
+salió del navegador, `401`/`403` = rechazada) y, cuando el código no es
+concluyente, con una petición mínima que pasa por RLS y responde tanto al token
+caducado como al usuario desactivado. Todo esto vive en `js/net.js`.
+
 ## Arquitectura
 
 Sin build step, a propósito: HTML + CSS + módulos ES nativos, `supabase-js` y
@@ -92,6 +121,7 @@ js/
   config.js               URL y clave publishable (públicas)
   supabaseClient.js       el cliente único
   auth.js  router.js  idle.js  theme.js  profile.js
+  net.js                  estado de la conexión y lectura de los fallos de escritura
   store.js                datos en memoria + escrituras + Realtime
   data.js                 definición de columnas y constantes de dominio
   grid.js                 tabla: orden, filtros, edición en celda, selector de columnas

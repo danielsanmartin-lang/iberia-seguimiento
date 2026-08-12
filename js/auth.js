@@ -1,5 +1,6 @@
 // Autenticación y perfil del usuario en sesión.
 import { sb } from './supabaseClient.js';
+import { writeFailed, withStatus } from './net.js';
 
 let _profile = null;
 
@@ -51,9 +52,22 @@ export async function changePassword(newPassword) {
 export async function saveColumnPrefs(prefs) {
   if (!_profile) return;
   _profile.column_prefs = prefs;
-  await sb.from('profiles').update({ column_prefs: prefs }).eq('id', _profile.id);
+  const { error, status } = await sb.from('profiles')
+    .update({ column_prefs: prefs }).eq('id', _profile.id);
+  // Antes esto era fire-and-forget: si fallaba, el usuario colocaba sus columnas,
+  // se iba tan contento y las encontraba desordenadas al día siguiente.
+  if (error) await writeFailed(withStatus(error, status), 'guardar el orden de las columnas');
 }
 
 export function onAuthChange(cb) {
-  sb.auth.onAuthStateChange((event) => cb(event));
+  sb.auth.onAuthStateChange((event) => {
+    // El SDK también cierra la sesión por su cuenta: refresh token caducado o
+    // revocado, o sesión invalidada desde otro dispositivo. Si el perfil no se
+    // limpia aquí, getProfile() sigue devolviendo el de antes, el router deja al
+    // usuario dentro de una app que ya no puede escribir, y todo lo que edite se
+    // pierde. Se hace en este módulo, que es el dueño de _profile, para que no
+    // dependa de que cada oyente se acuerde.
+    if (event === 'SIGNED_OUT') _profile = null;
+    cb(event);
+  });
 }
