@@ -97,6 +97,12 @@ async function sessionAlive() {
 
 // ─────────────────────────── indicador ───────────────────────────
 
+// El rótulo de 'stale' habla de la sesión aunque el estado sea "el canal de
+// Realtime no está vivo", y es a propósito: la causa habitual es volver al
+// portátil después de horas con el token caducado, y ahí lo único que hay que
+// hacer es recargar. Decir «Sin sincronizar» describía el síntoma y no la salida.
+// En un corte pasajero del canal el cartel exagera, pero ese se recupera solo en
+// segundos (SUBSCRIBED → recovered) y el tooltip matiza mientras dura.
 function paint() {
   const el = document.getElementById('netState');
   if (!el) return;
@@ -104,10 +110,11 @@ function paint() {
   el.hidden = !mode;
   if (!mode) return;
   el.dataset.state = mode;
-  el.innerHTML = `<i></i><span>${mode === 'down' ? 'Sin conexión' : 'Sin sincronizar'}</span>`;
+  el.innerHTML = `<i></i><span>${mode === 'down' ? 'Sin conexión' : 'Sesión caducada. Refresca la página.'}</span>`;
   el.title = mode === 'down'
     ? 'No hay conexión con la base de datos: lo que edites ahora no se guardará.'
-    : 'Los cambios en directo no están llegando: puede que no estés viendo lo último de los demás.';
+    : 'Los cambios en directo no están llegando: puede que no estés viendo lo último '
+      + 'de los demás. Recargar la página lo restablece.';
 }
 
 // ─────────────────────── caída y recuperación ───────────────────────
