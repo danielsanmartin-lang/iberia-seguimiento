@@ -6,5 +6,7 @@
 export const SUPABASE_URL = 'https://ppklcfsudukieqyaloze.supabase.co';
 export const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dDlkNDaWmCTg3mXLLbsacw_yXLuHDfE';
 
-// Cierre de sesión tras 30 min sin actividad.
-export const IDLE_MS = 30 * 60 * 1000;
+// Cierre de sesión tras 12 h sin actividad: una jornada entera. Con 30 min había
+// que volver a entrar cada vez que la pestaña se quedaba un rato quieta, y eso
+// pasa continuamente en una hoja que se consulta a ratos durante todo el día.
+export const IDLE_MS = 12 * 60 * 60 * 1000;
