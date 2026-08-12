@@ -98,6 +98,9 @@ textarea{resize:vertical}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--rl);
   padding:18px;box-shadow:var(--shadow-sm);margin-bottom:16px}
 .grid-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin:12px 0}
+/* Hueco para campos inyectados: sin display:contents el <span> sería una sola
+   celda de la rejilla y los campos se apilarían dentro de ella. */
+.cust-slot{display:contents}
 
 /* ─────────────────────────── acceso ─────────────────────────── */
 .auth{min-height:100vh;display:grid;place-items:center;padding:24px;
