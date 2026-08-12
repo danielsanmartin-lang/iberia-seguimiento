@@ -54,7 +54,10 @@ en su columna, así que no se repiten aquí.
 que ha firmado él. Las notas que venían del Excel están marcadas como importadas.
 
 **Panel superior** — Cuentas, Hoy, Esta semana, Vencidos, Sin fecha, Mías y
-recuentos por Owner. Todo clicable: filtra la tabla.
+recuentos por Owner. Todo clicable: filtra la tabla. Cada número se recalcula con
+los filtros puestos e ignora solo el suyo, así que dice cuántas filas verás al
+pulsarlo (con Owner = Ana, «Vencidos» son las vencidas de Ana) sin que los demás
+se muevan bajo el dedo al usarlos.
 
 **Export** — A `.xlsx` o CSV, exactamente lo que estés viendo (columnas visibles
 × filas filtradas). **No hay importación**: los datos entran por la tabla o por
@@ -73,7 +76,7 @@ los catálogos de Región y Sector; definir columnas personalizadas.
 No hay registro público. El admin crea las cuentas y entrega una contraseña
 provisional que el usuario está obligado a cambiar en su primer acceso. No se
 envía ningún correo: la contraseña se copia de la pantalla y se comparte por un
-canal seguro. La sesión se cierra sola a los 30 minutos de inactividad.
+canal seguro. La sesión se cierra sola a las 12 horas de inactividad.
 
 Los tres usuarios ven y editan **todo**. La única diferencia por rol es el panel
 de administración.
@@ -84,9 +87,10 @@ de administración.
 solo más tarde. La app está construida para que eso nunca pase en silencio:
 
 - **Aviso en la cabecera.** «Sin conexión» (rojo) cuando la base de datos no
-  responde; «Sin sincronizar» (ámbar) cuando lo que se ha caído es Realtime y
-  puede que no estés viendo los cambios de los demás. Si no hay aviso, no hay
-  problema.
+  responde; «Sesión caducada. Refresca la página.» (ámbar) cuando lo que se ha
+  caído es Realtime y puede que no estés viendo los cambios de los demás — el
+  caso típico es volver al portátil después de horas, y recargar lo arregla. Si
+  no hay aviso, no hay problema.
 - **Lo escrito no se pierde de vista.** Una celda que no se ha podido guardar se
   queda marcada en ámbar mostrando el valor que hay en la base de datos —lo que
   no está guardado no puede aparentar estarlo— y un clic reabre el editor con lo
