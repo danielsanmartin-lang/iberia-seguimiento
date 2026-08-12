@@ -69,9 +69,9 @@ function kpiTile(value, label, active, attr) {
 function renderKpis() {
   const k = computeKpis();
   const el = document.getElementById('kpis');
-  // Grupo de pastillas con su etiqueta. Si la columna está vacía en toda la
-  // tabla no se pinta el grupo: una etiqueta suelta sin nada al lado solo
-  // genera dudas.
+  // Grupo de pastillas con su etiqueta. Si no queda ningún valor con los demás
+  // filtros puestos —y ninguno marcado— no se pinta el grupo: una etiqueta
+  // suelta sin nada al lado solo genera dudas.
   const grupo = (rotulo, key) => {
     const entries = breakdown(key);
     if (!entries.length) return '';
@@ -83,9 +83,14 @@ function renderKpis() {
   };
   const owners = grupo('Owner', 'owner_id');
 
+  // «Cuentas» ya no muestra el total de la tabla sino el de los filtros puestos,
+  // pero al pulsarlo sigue quitándolos todos. El title dice las dos cosas: es el
+  // único tile cuyo número no anticipa lo que sale al pulsarlo.
+  const attrTodo = `data-kpi="todo" title="Quita todos los filtros (${state.accounts.length} cuentas en total)"`;
+
   el.innerHTML = `
     <div class="kpi-row">
-      ${kpiTile(k.total, 'Cuentas', !hasActiveFilters(), 'data-kpi="todo"')}
+      ${kpiTile(k.total, 'Cuentas', !hasActiveFilters(), attrTodo)}
       ${kpiTile(k.hoy, 'Hoy', filters.datePreset === 'hoy', 'data-kpi="hoy"')}
       ${kpiTile(k.semana, 'Esta semana', filters.datePreset === 'semana', 'data-kpi="semana"')}
       ${kpiTile(k.vencidos, 'Vencidos', filters.datePreset === 'vencidos', 'data-kpi="vencidos"')}

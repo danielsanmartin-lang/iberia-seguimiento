@@ -2,7 +2,7 @@
 // (el equivalente al autofiltro que tenía el Excel).
 import { state, getValue, ownerName, columnByKey, notesFor } from './store.js';
 import { getProfile } from './auth.js';
-import { escHtml, daysFromToday, todayISO, endOfWeekISO, fmtMonth } from './util.js';
+import { escHtml, todayISO, endOfWeekISO, fmtMonth } from './util.js';
 
 export const filters = {
   search: '',
@@ -53,19 +53,40 @@ export function clearFilters() {
   filters.mine = false;
 }
 
-function matchesDate(acc) {
-  if (!filters.datePreset) return true;
+// ¿Esta cuenta cae en uno de los cuatro presets de fecha? Un solo juez para el
+// filtro y para los KPIs: el número del tile tiene que salir del mismo cálculo
+// que las filas que salen al pulsarlo, no de otro que dé lo mismo por poco.
+// 'hoy' y 'finSemana' entran como parámetros porque el bucle de KPIs los calcula
+// una vez, mientras que aquí se llamaría una vez por cuenta.
+function enPreset(acc, preset, hoy, finSemana) {
   const d = acc.next_touch;
-  if (filters.datePreset === 'sinfecha') return !d;
+  if (preset === 'sinfecha') return !d;
   if (!d) return false;
-  if (filters.datePreset === 'vencidos') return daysFromToday(d) < 0;
-  if (filters.datePreset === 'hoy') return d === todayISO();
-  if (filters.datePreset === 'semana') return d >= todayISO() && d <= endOfWeekISO();
+  if (preset === 'vencidos') return d < hoy;
+  if (preset === 'hoy') return d === hoy;
+  if (preset === 'semana') return d >= hoy && d <= finSemana;
   return true;
 }
 
-export function matches(acc) {
-  if (filters.search) {
+function matchesDate(acc) {
+  if (!filters.datePreset) return true;
+  return enPreset(acc, filters.datePreset, todayISO(), endOfWeekISO());
+}
+
+// Un solo juez de "cuenta mía", que comparten el filtro y el tile «Mías». Con dos
+// predicados distintos el número del tile podía dejar de cuadrar con las filas.
+const esMia = (acc) => !!acc.owner_id && acc.owner_id === getProfile()?.id;
+
+// `omitir`: Set opcional de dimensiones que NO se aplican ('search' | 'mine' |
+// 'date' | clave de columna). Lo usan los recuentos, porque cada mando de la
+// interfaz cuenta ignorando solo el suyo (ver computeKpis y breakdown). Ninguna
+// columna puede llamarse como esos tres centinelas: las de serie son fijas y las
+// que crea el admin van siempre namespaced a 'custom.<clave>'.
+//
+// OJO al llamarlo: `.filter(matches)` NO vale. filter pasa (elemento, índice) y
+// ese índice llegaría aquí como `omitir`.
+export function matches(acc, omitir) {
+  if (filters.search && !omitir?.has('search')) {
     const q = filters.search.toLowerCase();
     const campos = [acc.name, acc.region, acc.sector, ownerName(acc)]
       .some((v) => String(v || '').toLowerCase().includes(q));
@@ -74,18 +95,18 @@ export function matches(acc) {
     // en una entrada antigua). Las notas ya están en memoria, así que es gratis.
     if (!campos && !notesFor(acc.id).some((n) => n.body.toLowerCase().includes(q))) return false;
   }
-  if (filters.mine && acc.owner_id !== getProfile()?.id) return false;
-  if (!matchesDate(acc)) return false;
+  if (filters.mine && !omitir?.has('mine') && !esMia(acc)) return false;
+  if (!omitir?.has('date') && !matchesDate(acc)) return false;
 
   for (const [key, set] of Object.entries(filters.values)) {
-    if (!set || !set.size) continue;
+    if (!set || !set.size || omitir?.has(key)) continue;
     if (!set.has(filterKey(acc, key))) return false;
   }
   return true;
 }
 
 export function visibleRows() {
-  const rows = state.accounts.filter(matches);
+  const rows = state.accounts.filter((a) => matches(a));
   rows.sort((a, b) => {
     // Ordenar textos libres por su primera letra no dice nada; lo que se quiere
     // saber de la última nota es cuál se escribió más recientemente.
@@ -119,10 +140,7 @@ export function visibleRows() {
 // Se calculan sobre las filas que pasan TODOS los demás filtros, como en Excel:
 // así los recuentos reflejan lo que realmente vas a ver al marcar.
 export function distinctFor(key) {
-  const saved = filters.values[key];
-  delete filters.values[key];
-  const base = state.accounts.filter(matches);
-  if (saved) filters.values[key] = saved;
+  const base = state.accounts.filter((a) => matches(a, new Set([key])));
 
   const counts = new Map();
   for (const acc of base) {
@@ -145,33 +163,61 @@ export function isFiltered(key) {
 }
 
 // ─────────────────────────── KPIs ───────────────────────────
-// Se calculan sobre el total, no sobre lo filtrado: son el panorama fijo desde
-// el que se navega, y cambiarían bajo los pies al pulsarlos.
+// Cada tile dice cuántas filas verás al pulsarlo: respeta los demás filtros e
+// ignora solo el suyo. Contar sobre el total dejaba los seis números clavados al
+// filtrar por owner (el tile decía 10 vencidas y en la tabla había una); contar
+// sobre lo filtrado los movería bajo el dedo, porque pulsar «Vencidos» dejaría
+// «Hoy» en 0 y no quedaría desde dónde volver.
+// Las cuatro fechas son un mismo mando, así que comparten base.
+const OMITE_FECHA = new Set(['date']);
+const OMITE_MIAS = new Set(['mine']);
+
 export function computeKpis() {
-  const me = getProfile()?.id;
   const hoy = todayISO();
   const finSemana = endOfWeekISO();
-  const k = { total: 0, hoy: 0, semana: 0, vencidos: 0, sinfecha: 0, mias: 0 };
-  for (const a of state.accounts) {
-    k.total++;
-    if (a.owner_id && a.owner_id === me) k.mias++;
-    if (!a.next_touch) { k.sinfecha++; continue; }
-    if (a.next_touch === hoy) k.hoy++;
-    if (a.next_touch >= hoy && a.next_touch <= finSemana) k.semana++;
-    if (a.next_touch < hoy) k.vencidos++;
+  const base = state.accounts.filter((a) => matches(a, OMITE_FECHA));
+  const k = { total: base.length, hoy: 0, semana: 0, vencidos: 0, sinfecha: 0, mias: 0 };
+  for (const a of base) {
+    if (enPreset(a, 'sinfecha', hoy, finSemana)) { k.sinfecha++; continue; }
+    if (enPreset(a, 'hoy', hoy, finSemana)) k.hoy++;
+    if (enPreset(a, 'semana', hoy, finSemana)) k.semana++;
+    if (enPreset(a, 'vencidos', hoy, finSemana)) k.vencidos++;
   }
+  // «Mías» es otro mando: respeta el preset de fecha y solo ignora su propio
+  // interruptor, así que lleva pasada propia. Y hay que forzar la condición
+  // además de omitirla: un interruptor ignorado no cuenta a los míos, cuenta a
+  // todo el mundo. esMia va delante porque corta antes de recorrer las notas de
+  // las cuentas ajenas.
+  for (const a of state.accounts) if (esMia(a) && matches(a, OMITE_MIAS)) k.mias++;
   return k;
 }
 
 // Recuentos por columna para las pastillas clicables (Owner, Deal, Sector…).
+// Como los tiles: se cuentan sobre las filas que pasan todos los filtros MENOS
+// el de esta columna, así que «Daniel San Martín 6» son las seis que verías al
+// pulsarla, no las que tiene en toda la tabla.
 export function breakdown(key, limit = 8) {
+  const base = state.accounts.filter((a) => matches(a, new Set([key])));
   const counts = new Map();
-  for (const a of state.accounts) {
-    const raw = cellValue(a, key);
-    if (raw === null || raw === undefined || raw === '') continue;
-    counts.set(String(raw), (counts.get(String(raw)) || 0) + 1);
+  for (const a of base) {
+    // El mismo agrupador que el embudo, no el valor crudo: en una columna con
+    // filterBy:'month' la pastilla guardaría '2026-08-14' mientras el filtro
+    // compara contra '2026-08', y no casaría nunca.
+    const v = filterKey(a, key);
+    if (v === VACIO) continue;   // los huecos se acotan desde el embudo, no con pastilla
+    counts.set(v, (counts.get(v) || 0) + 1);
   }
-  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
+  const out = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
+
+  // Una pastilla marcada no puede desaparecer: si otro filtro deja su recuento a
+  // 0 o la echa del top, seguiría filtrando y es el único sitio donde se apaga.
+  for (const v of filters.values[key] || []) {
+    // El embudo mete el centinela VACIO (un Symbol) en este mismo Set, y de aquí
+    // el valor sale hacia un atributo del DOM, por donde un Symbol no viaja.
+    if (typeof v !== 'string' || out.some(([w]) => w === v)) continue;
+    out.push([v, counts.get(v) || 0]);
+  }
+  return out;
 }
 
 // ──────────────── desplegable de filtro por columna ────────────────
