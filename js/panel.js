@@ -142,7 +142,11 @@ export function openPanel(id) {
 // Popup con ÚNICAMENTE el historial: ni región, ni owner, ni fecha, ni el botón
 // de borrar. El título sigue siendo el nombre de la cuenta, que es el mínimo
 // para saber de quién son las notas que estás leyendo.
-export function openNotes(id) {
+//
+// `borrador` deja texto escrito en el formulario de alta de nota. Lo usa el
+// alta de cuenta cuando la cuenta se crea pero su primera nota no llega: el
+// texto no se pierde y reintentarlo es pulsar «Añadir».
+export function openNotes(id, borrador = '') {
   const acc = state.byId.get(id);
   if (!acc) return;
   currentId = id;
@@ -155,6 +159,12 @@ export function openNotes(id) {
   document.getElementById('panel').classList.add('open');
   document.getElementById('panelBackdrop').hidden = false;
   renderNotes(id);
+
+  if (borrador) {
+    const ta = document.getElementById('noteBody');
+    ta.value = borrador;
+    ta.focus();
+  }
 }
 
 function renderNotes(id) {
@@ -214,7 +224,13 @@ function renderNotes(id) {
 function initNewDialog() {
   const dlg = document.getElementById('dlgNew');
   document.getElementById('btnNew').addEventListener('click', () => {
+    // Todo el formulario se vacía aquí, al abrir, y no al cerrar: si el alta
+    // falla el diálogo se queda abierto con lo escrito a propósito, y quien
+    // cancela a medias tampoco debe encontrárselo la próxima vez.
     dlg.querySelector('#nName').value = '';
+    dlg.querySelector('#nDate').value = '';
+    dlg.querySelector('#nHs').value = '';
+    dlg.querySelector('#nNote').value = '';
     dlg.querySelector('#nRegion').innerHTML = optionsFor(state.catalogs.region);
     dlg.querySelector('#nSector').innerHTML = optionsFor(state.catalogs.sector);
     dlg.querySelector('#nOwner').innerHTML = '<option value="">—</option>' +
@@ -268,6 +284,7 @@ function initNewDialog() {
       sector: dlg.querySelector('#nSector').value || null,
       owner_id: ownerId,
       owner_name: owner ? (owner.full_name || owner.email) : null,
+      next_touch: dlg.querySelector('#nDate').value || null,
       hubspot_url: dlg.querySelector('#nHs').value.trim() || null,
     };
     if (Object.keys(custom).length) fields.custom = custom;
@@ -275,10 +292,26 @@ function initNewDialog() {
     const { account, error } = await createAccount(fields);
     // El diálogo no se cierra si falla: los datos escritos siguen dentro.
     if (error) { await writeFailed(error, 'crear la cuenta'); return; }
+
+    // La primera nota es una entrada del historial como cualquier otra —firmada
+    // y fechada—, así que va a account_notes y necesita el id de la cuenta. Eso
+    // la obliga a ir en segunda petición, y a poder fallar con la cuenta ya
+    // creada: son dos escrituras, no una.
+    const nota = dlg.querySelector('#nNote').value.trim();
+    const notaError = nota ? (await addNote(account.id, nota, getProfile())).error : null;
+
     dlg.close();
-    dlg.querySelector('#nHs').value = '';
-    toast(`«${account.name}» creada.`);
     afterChange();
+
+    if (notaError) {
+      // Un solo aviso con toda la historia: el motivo lo pone writeFailed y el
+      // paréntesis evita el susto de creer que no se ha creado nada. El texto
+      // de la nota se reabre en el historial, a un clic de «Añadir».
+      openNotes(account.id, nota);
+      await writeFailed(notaError, 'guardar la nota (la cuenta sí se ha creado)');
+      return;
+    }
+    toast(`«${account.name}» creada.`);
     openPanel(account.id);
   });
 }

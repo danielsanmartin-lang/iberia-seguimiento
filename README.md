@@ -56,6 +56,13 @@ de notas**. «Actualizado» está disponible pero oculta por defecto.
 URL de HubSpot. Nada más: el historial tiene su propio popup y la fecha se edita
 en su columna, así que no se repiten aquí.
 
+**Alta de cuenta** — Además de esos campos, el diálogo pide **fecha de
+seguimiento** y **primera nota**. Sí se repiten aquí, al revés que en la ficha, y
+es a propósito: cuando das de alta una cuenta acabas de hablar con alguien, sabes
+cuándo toca volver y tienes algo que contar. Dejarlo para después significaba
+crear, abrir la ficha, cerrar, buscar la fila, poner la fecha y abrir las notas.
+La nota entra como una entrada normal del historial, firmada y fechada.
+
 **Historial** — Entradas con autor y fecha automáticos; cada uno edita solo lo
 que ha firmado él. Las notas que venían del Excel están marcadas como importadas.
 
