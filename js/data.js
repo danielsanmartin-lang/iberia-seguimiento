@@ -52,6 +52,8 @@ export const DEFAULT_VISIBLE = GRID_COLUMNS
   .filter((c) => c.key !== 'updated_at')
   .map((c) => c.key);
 
-// Los tipos que se editan haciendo clic en la celda. La nota y el botón de
-// historial quedan fuera a propósito: se tocan desde la ficha o el popup.
+// Los tipos que se editan haciendo clic en la celda escribiendo en `accounts`.
+// La última nota también se edita con un clic, pero va a otra tabla
+// (`account_notes`) y con sus propias reglas de permiso, así que tiene su
+// camino aparte en grid.js. El botón del historial no se edita: abre el popup.
 export const EDITABLE_TYPES = new Set(['text', 'date', 'select', 'catalog', 'owner']);

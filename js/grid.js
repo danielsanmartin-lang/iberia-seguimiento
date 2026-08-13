@@ -1,7 +1,9 @@
 // La tabla: cabecera con orden y filtro, filas con edición en celda, tiles de
 // KPI y selector de columnas. Todo se repinta desde memoria.
-import { state, allColumns, updateField, ownerName, getValue, onChange } from './store.js';
-import { getProfile, saveColumnPrefs } from './auth.js';
+import {
+  state, allColumns, updateField, ownerName, getValue, onChange, addNote, updateNote,
+} from './store.js';
+import { getProfile, isAdmin, saveColumnPrefs } from './auth.js';
 import { DEFAULT_VISIBLE, EDITABLE_TYPES } from './data.js';
 import {
   filters, sort, visibleRows, computeKpis, breakdown, hasActiveFilters,
@@ -116,6 +118,15 @@ function renderKpis() {
   }));
 }
 
+// ¿Puede este usuario editar la última nota de la cuenta desde la celda?
+// La misma regla que el historial: escribe quien firmó, o un admin. Sin nota
+// todavía, cualquiera puede escribir la primera —eso no pisa nada de nadie—.
+function noteEditable(acc) {
+  const n = acc.last_note;
+  if (!n) return true;
+  return isAdmin() || (!!n.author_id && n.author_id === getProfile()?.id);
+}
+
 function cellHtml(acc, col) {
   const v = cellValue(acc, col.key);
 
@@ -127,12 +138,21 @@ function cellHtml(acc, col) {
     return `<span class="gname">${escHtml(acc.name)}</span>${link}`;
   }
   if (col.type === 'note') {
-    if (!acc.last_note) return '<span class="muted">—</span>';
+    // El title de la celda ya está contado (aviso de "sin guardar"): no se pisa
+    // con la firma, que es lo secundario cuando hay un cambio en el aire.
+    const stuck = pending.has(pkey(acc.id, col.key));
+    if (!acc.last_note) {
+      const tip = stuck ? '' : ' title="Clic para escribir la primera nota"';
+      return `<span class="muted"${tip}>—</span>`;
+    }
     // El texto completo, con sus saltos de línea: la fila crece hasta que cabe.
     // Autor y fecha van en el title para no meter ruido en la celda.
     const n = acc.last_note;
     const firma = `${n.author_name || 'Anónimo'} · ${fmtDateTime(n.created_at)}`;
-    return `<div class="gnote" title="${escHtml(firma)}">${escHtml(n.body)}</div>`;
+    const tip = stuck ? '' : ` title="${escHtml(firma)}\n${noteEditable(acc)
+      ? 'Clic para editarla'
+      : 'Solo su autor o un admin pueden editarla. Clic para ver el historial'}"`;
+    return `<div class="gnote"${tip}>${escHtml(n.body)}</div>`;
   }
   if (col.type === 'noteslog') {
     const n = acc.notes_count || 0;
@@ -187,7 +207,11 @@ export function render() {
     const cls = d !== null && d < 0 ? ' overdue' : '';
     return `<div class="grow${cls}" data-id="${a.id}">${cols.map((c) => {
       const p = pending.get(pkey(a.id, c.key));
-      const extra = (EDITABLE_TYPES.has(c.type) ? ' editable' : '')
+      // La nota se edita en la celda como cualquier otro campo, pero solo la
+      // suya: si es de otro, la celda no se ofrece como editable y el clic
+      // lleva al historial.
+      const editable = c.type === 'note' ? noteEditable(a) : EDITABLE_TYPES.has(c.type);
+      const extra = (editable ? ' editable' : '')
         + (c.type === 'note' ? ' gc-note' : '')
         + (p ? ' pending' : '');
       const tip = p ? ` title="${escHtml(pendingTip(p))}"` : '';
@@ -335,6 +359,93 @@ function startEdit(cellEl, acc, col) {
     if (e.key === 'Escape') { e.preventDefault(); cancel(); }
   });
   if (ctrl.tagName === 'SELECT') ctrl.addEventListener('change', () => ctrl.blur());
+}
+
+// ───────────────── edición de la última nota ─────────────────
+// La nota no se guarda en `accounts` sino en `account_notes`, así que tiene su
+// propio editor: un textarea que crece con el texto y escribe sobre la entrada
+// del historial que se está viendo (o crea la primera si no hay ninguna).
+// Editar aquí NO añade una entrada nueva: es la misma nota, para corregirla sin
+// abrir el popup. Para añadir otra entrada está el botón «Notas».
+
+function startNoteEdit(cellEl, acc, col) {
+  if (editing) return;
+  editing = { id: acc.id, key: col.key };
+  cellEl.classList.add('editing');
+
+  const note = acc.last_note;
+  const k = pkey(acc.id, col.key);
+  const stuck = pending.get(k);
+  const raw = stuck ? (stuck.value ?? '') : (note?.body ?? '');
+
+  const ta = document.createElement('textarea');
+  ta.className = 'cell-edit note-cell-edit';
+  ta.rows = 1;
+  ta.value = raw;
+  ta.placeholder = note ? '' : 'Escribe la nota…';
+  cellEl.innerHTML = '';
+  cellEl.appendChild(ta);
+
+  // Crece con el contenido: una nota de seis líneas no se edita por una mirilla.
+  const grow = () => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight}px`; };
+  ta.addEventListener('input', grow);
+  grow();
+  ta.focus();
+  // Cursor al final, sin seleccionar: lo normal es rematar la nota, no
+  // reescribirla, y con todo seleccionado la primera tecla se la lleva por delante.
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+
+  let done = false;
+  async function commit() {
+    if (done) return;
+    const next = ta.value.trim();
+    const before = note?.body ?? '';
+    done = true;
+
+    if (next === before) {
+      pending.delete(k);
+      closeEditor(cellEl, acc, col);
+      return;
+    }
+    // Vaciar la celda no borra la entrada: eso es tirar historial firmado, y se
+    // hace a conciencia desde el popup, no por dejar un textarea en blanco.
+    if (!next) {
+      toast('La nota no puede quedarse vacía. Bórrala desde «Notas».', 'err');
+      closeEditor(cellEl, acc, col);
+      return;
+    }
+
+    ta.disabled = true;   // guardando: ni doble envío ni seguir tecleando
+    const { error } = note
+      ? await updateNote(note.id, next)
+      : await addNote(acc.id, next, getProfile());
+    if (error) {
+      // Igual que en el resto de celdas: la celda vuelve a lo que dice la base
+      // de datos, en ámbar, y guarda lo escrito para reintentarlo con un clic.
+      pending.set(k, { value: next, label: next.length > 60 ? `${next.slice(0, 60)}…` : next });
+      closeEditor(cellEl, acc, col);
+      await writeFailed(error, 'guardar la nota');
+      return;
+    }
+    pending.delete(k);
+    pendingRender = true;   // el alto de la fila cambia: repinta la tabla
+    closeEditor(cellEl, acc, col);
+  }
+  function cancel() {
+    if (done) return;
+    done = true;
+    ta.removeEventListener('blur', commit);
+    closeEditor(cellEl, acc, col);
+  }
+  editing.cancel = cancel;
+
+  ta.addEventListener('blur', commit);
+  ta.addEventListener('keydown', (e) => {
+    // Enter hace salto de línea (es una nota, no un campo de una línea); se
+    // guarda al salir, con Ctrl/⌘+Enter o con Esc para descartar.
+    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); ta.blur(); }
+  });
 }
 
 // ──────────────── reordenar columnas arrastrando ────────────────
@@ -555,6 +666,15 @@ export function initGrid() {
 
     const col = allColumns().find((c) => c.key === cell.dataset.k);
     if (!col) return;
+
+    // La última nota se edita con un clic sobre ella, como cualquier otra celda.
+    // Si es de otro, no hay nada que abrir: el clic lleva al historial, que es
+    // donde sí puede añadir la suya.
+    if (col.type === 'note') {
+      if (noteEditable(acc)) startNoteEdit(cell, acc, col);
+      else openNotes(acc.id);
+      return;
+    }
 
     if (EDITABLE_TYPES.has(col.type)) startEdit(cell, acc, col);
   });
