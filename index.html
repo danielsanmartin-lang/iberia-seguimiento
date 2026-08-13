@@ -171,10 +171,13 @@
     <label class="fld"><span>Región</span><select id="nRegion"></select></label>
     <label class="fld"><span>Sector</span><select id="nSector"></select></label>
     <label class="fld"><span>Owner</span><select id="nOwner"></select></label>
+    <label class="fld"><span>Fecha de seguimiento</span><input id="nDate" type="date"></label>
     <!-- Las columnas personalizadas del admin (Tipo de empresa…) las pinta panel.js
          aquí dentro. display:contents para que sean hijas de la rejilla. -->
     <span id="nCustom" class="cust-slot"></span>
     <label class="fld wide"><span>URL de HubSpot</span><input id="nHs" type="url" placeholder="https://app-eu1.hubspot.com/…"></label>
+    <label class="fld wide"><span>Primera nota <small>se guarda con tu nombre y la fecha, como una entrada más del historial</small></span>
+      <textarea id="nNote" rows="3" placeholder="Lo que ya sabes de la cuenta: de dónde sale, con quién has hablado, qué toca…"></textarea></label>
   </div>
   <div class="dlg-acts">
     <button id="nCancel" class="btn" type="button">Cancelar</button>

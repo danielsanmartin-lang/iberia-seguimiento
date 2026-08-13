@@ -43,6 +43,9 @@ export const GRID_COLUMNS = [
 
 // Campos de la ficha, en el orden en que se pintan. La fecha no está: se edita
 // en su columna de la tabla, y repetirla aquí solo daba dos sitios donde mirar.
+// El alta sí la pide (y la primera nota con ella), porque una cuenta recién
+// creada no tiene ni columna que tocar ni historial que abrir todavía; sus
+// campos están escritos a mano en el diálogo de index.html.
 export const PANEL_FIELDS = [
   F.region, F.sector, F.owner_id, F.hubspot_url,
 ];

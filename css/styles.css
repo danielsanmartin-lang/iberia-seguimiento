@@ -83,6 +83,8 @@ textarea{resize:vertical}
 .fld{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--ink3)}
 .fld>span{letter-spacing:.02em}
 .fld.wide{grid-column:1/-1}
+/* Aclaración junto a la etiqueta, en el tono de la letra pequeña del historial. */
+.fld span small{font-weight:500;font-size:11px;color:var(--ink4)}
 .pw{position:relative;display:block}
 .pw input{padding-right:38px}
 .pw-eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:30px;height:28px;
