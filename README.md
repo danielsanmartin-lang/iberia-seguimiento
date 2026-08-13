@@ -34,6 +34,12 @@ de notas**. «Actualizado» está disponible pero oculta por defecto.
 
 - **Edición en la celda**: un clic, se guarda al salir, `Esc` cancela.
 - **La última nota se lee entera** en su celda: la fila crece hasta que cabe.
+- **Y se edita ahí mismo**, con un clic, como cualquier otra celda: se abre un
+  editor multilínea que crece con el texto (`Esc` cancela, `Ctrl`/`⌘`+`Enter`
+  guarda sin salir). Corrige *esa* entrada del historial, no crea una nueva —
+  para eso está el botón «Notas». Rige la misma regla que el historial: edita
+  quien la firmó, o un admin; si es de otro, el clic abre el historial, que es
+  donde puede añadir la suya. Sobre una celda vacía se escribe la primera nota.
 - **Histórico de notas**: un botón abre un popup con solo el historial.
 - **Filtro por columna** con recuentos, igual que el autofiltro de Excel. La
   columna de fecha agrupa por mes («ago 2026»), no por día.
