@@ -2,9 +2,10 @@
 // y el historial de notas con autor y fecha.
 import {
   state, panelFields, getValue, updateField, deleteAccount,
-  notesFor, addNote, updateNote, deleteNote, createAccount,
+  notesFor, addNote, updateNote, deleteNote, createAccount, noteVersions,
 } from './store.js';
 import { getProfile, isAdmin } from './auth.js';
+import { attachMentions, renderNoteBody } from './mentions.js';
 import { writeFailed } from './net.js';
 import { escHtml, fmtDateTime, toast, looksLikeDuplicate } from './util.js';
 
@@ -73,9 +74,26 @@ function notesBlockHtml() {
     </div>`;
 }
 
+// Una nota editada se reconoce sin preguntar nada a la red, así que «ver
+// versiones» se ofrece al instante y los textos anteriores solo se piden si
+// alguien los despliega.
+//
+// Manda `updated_by`, que el trigger sella en cada UPDATE y que en una nota
+// recién creada es null. La comparación de fechas va detrás como red: now()
+// devuelve la hora de la TRANSACCIÓN, así que una nota creada y editada en la
+// misma no la delataría, mientras que una editada por SQL (sin sesión, y por
+// tanto sin updated_by) solo se ve por ahí.
+const fueEditada = (n) => !!n.updated_by || (!!n.updated_at && n.updated_at > n.created_at);
+
 function noteHtml(n, meId) {
   const mine = n.author_id && n.author_id === meId;
   const canEdit = mine || isAdmin();
+  const quien = state.profiles.find((p) => p.id === n.updated_by);
+  const editada = fueEditada(n)
+    ? `<div class="note-edited">editada${quien ? ` por ${escHtml(quien.full_name || quien.email)}` : ''}
+         · ${fmtDateTime(n.updated_at)}
+         · <button type="button" data-versions>ver versiones</button></div>`
+    : '';
   return `<article class="note${n.is_legacy ? ' legacy' : ''}" data-note="${n.id}">
     <header>
       <strong>${escHtml(n.author_name || 'Anónimo')}</strong>
@@ -85,7 +103,8 @@ function noteHtml(n, meId) {
         <button type="button" data-edit-note>Editar</button>
         <button type="button" data-del-note>Borrar</button></span>` : ''}
     </header>
-    <div class="note-body">${escHtml(n.body).replace(/\n/g, '<br>')}</div>
+    <div class="note-body">${renderNoteBody(n.body).replace(/\n/g, '<br>')}</div>
+    ${editada}
   </article>`;
 }
 
@@ -146,7 +165,11 @@ export function openPanel(id) {
 // `borrador` deja texto escrito en el formulario de alta de nota. Lo usa el
 // alta de cuenta cuando la cuenta se crea pero su primera nota no llega: el
 // texto no se pierde y reintentarlo es pulsar «Añadir».
-export function openNotes(id, borrador = '') {
+//
+// `resaltar` es el id de una entrada a la que saltar y marcar unos segundos. Lo
+// usa la bandeja de menciones: abrir el historial entero y que te busques la
+// nota por la que has venido no es llevar a ninguna parte.
+export function openNotes(id, borrador = '', resaltar = null) {
   const acc = state.byId.get(id);
   if (!acc) return;
   currentId = id;
@@ -165,6 +188,14 @@ export function openNotes(id, borrador = '') {
     ta.value = borrador;
     ta.focus();
   }
+  if (resaltar) {
+    const art = document.querySelector(`[data-note="${CSS.escape(resaltar)}"]`);
+    if (art) {
+      art.scrollIntoView({ block: 'center' });
+      art.classList.add('note-hl');
+      setTimeout(() => art.classList.remove('note-hl'), 2600);
+    }
+  }
 }
 
 function renderNotes(id) {
@@ -176,6 +207,9 @@ function renderNotes(id) {
   list.innerHTML = notes.length
     ? notes.map((n) => noteHtml(n, meId)).join('')
     : '<p class="muted">Todavía no hay entradas.</p>';
+
+  const nueva = document.getElementById('noteBody');
+  if (nueva && !nueva.dataset.mn) { nueva.dataset.mn = '1'; attachMentions(nueva); }
 
   document.getElementById('noteAdd').onclick = async () => {
     const ta = document.getElementById('noteBody');
@@ -199,6 +233,35 @@ function renderNotes(id) {
     afterChange();
   }));
 
+  // Versiones anteriores: se piden al desplegarlas, no al abrir el historial.
+  // El popup promete abrirse sin esperar a la red y esto no lo cambia.
+  list.querySelectorAll('[data-versions]').forEach((b) => b.addEventListener('click', async () => {
+    const art = b.closest('[data-note]');
+    if (art.querySelector('.note-versions')) {   // segundo clic: se pliega
+      art.querySelector('.note-versions').remove();
+      b.textContent = 'ver versiones';
+      return;
+    }
+    b.textContent = 'cargando…';
+    const { versions, error } = await noteVersions(art.dataset.note);
+    b.textContent = 'ocultar versiones';
+    if (error) { b.textContent = 'ver versiones'; await writeFailed(error, 'leer las versiones'); return; }
+
+    const bloque = document.createElement('div');
+    bloque.className = 'note-versions';
+    bloque.innerHTML = versions.length
+      ? versions.map((v) => {
+        const quien = state.profiles.find((p) => p.id === v.edited_by);
+        return `<div class="note-version">
+            <span class="muted">antes de ${escHtml(quien?.full_name || quien?.email || 'la edición')}
+              · ${fmtDateTime(v.created_at)}</span>
+            <div>${renderNoteBody(v.body).replace(/\n/g, '<br>')}</div>
+          </div>`;
+      }).join('') + '<p class="muted note-version-pie">Se guardan las 3 últimas versiones.</p>'
+      : '<p class="muted">No queda ninguna versión anterior guardada.</p>';
+    art.appendChild(bloque);
+  }));
+
   list.querySelectorAll('[data-edit-note]').forEach((b) => b.addEventListener('click', () => {
     const art = b.closest('[data-note]');
     const noteId = art.dataset.note;
@@ -207,6 +270,7 @@ function renderNotes(id) {
     bodyEl.innerHTML = `<textarea class="note-edit" rows="4">${escHtml(note.body)}</textarea>
       <div class="note-edit-acts"><button type="button" data-save>Guardar</button>
       <button type="button" data-cancel>Cancelar</button></div>`;
+    attachMentions(bodyEl.querySelector('textarea'));
     bodyEl.querySelector('[data-cancel]').onclick = () => renderNotes(id);
     bodyEl.querySelector('[data-save]').onclick = async () => {
       const text = bodyEl.querySelector('textarea').value.trim();
@@ -223,6 +287,7 @@ function renderNotes(id) {
 
 function initNewDialog() {
   const dlg = document.getElementById('dlgNew');
+  attachMentions(dlg.querySelector('#nNote'));
   document.getElementById('btnNew').addEventListener('click', () => {
     // Todo el formulario se vacía aquí, al abrir, y no al cerrar: si el alta
     // falla el diálogo se queda abierto con lo escrito a propósito, y quien

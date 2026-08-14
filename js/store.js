@@ -27,11 +27,20 @@ export const state = {
   catalogs: { region: [], sector: [] },
   fields: [],            // columnas personalizadas definidas por el admin
   notes: new Map(),      // account_id -> [notas], la más reciente primero
+  // Menciones que YA he atendido (ids de nota). A quién menciona una nota no se
+  // guarda en ninguna parte: se deduce de su texto. Lo único que hay que
+  // persistir es esto, que no está escrito en ningún sitio.
+  mentionsDone: new Set(),
 };
 
 const listeners = new Set();
 export function onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 function emit(reason) { listeners.forEach((fn) => fn(reason)); }
+
+// Aviso de "ha entrado una nota nueva de otra persona", con la nota. onChange no
+// sirve para esto: dice que algo cambió, no qué. Lo usa el aviso de mención.
+const noteListeners = new Set();
+export function onNoteArrived(fn) { noteListeners.add(fn); return () => noteListeners.delete(fn); }
 
 function index() {
   state.byId = new Map(state.accounts.map((a) => [a.id, a]));
@@ -96,7 +105,7 @@ export function resyncNotes(accountId) {
 }
 
 export async function loadAll() {
-  const [accs, notes, profs, cats, flds] = await Promise.all([
+  const [accs, notes, profs, cats, flds, dones] = await Promise.all([
     sb.from('accounts').select('*').order('name'),
     // Se traen los cuerpos completos, no solo el recuento: la tabla muestra el
     // texto de la última nota de cada cuenta. Son ~250 notas y ~30 KB, y de
@@ -105,6 +114,9 @@ export async function loadAll() {
     sb.from('profiles').select('id, full_name, email, role, is_active').order('full_name'),
     sb.from('catalog_options').select('kind, value, position').order('position'),
     sb.from('field_defs').select('*').order('position'),
+    // Las menciones que ya he atendido. RLS deja ver solo las propias, así que
+    // no hace falta filtrar por usuario aquí.
+    sb.from('mention_states').select('note_id'),
   ]);
   if (accs.error) throw withStatus(accs.error, accs.status);
   if (notes.error) throw withStatus(notes.error, notes.status);
@@ -125,6 +137,7 @@ export async function loadAll() {
     sector: (cats.data || []).filter((c) => c.kind === 'sector').map((c) => c.value),
   };
   state.fields = flds.data || [];
+  state.mentionsDone = new Set((dones.data || []).map((m) => m.note_id));
   emit('load');
 }
 
@@ -248,6 +261,45 @@ export async function deleteNote(noteId, accountId) {
   return {};
 }
 
+// Versiones anteriores de una nota. NO se traen en loadAll: casi nunca se
+// miran, y el historial ya sabe cuáles existen sin preguntar (una nota editada
+// cumple updated_at > created_at). Se piden solo al desplegarlas.
+export async function noteVersions(noteId) {
+  const { data, error, status } = await sb.from('account_note_versions')
+    .select('*').eq('note_id', noteId).order('created_at', { ascending: false });
+  if (error) return { error: withStatus(error, status) };
+  return { versions: data || [] };
+}
+
+// ─────────────────────────── menciones ───────────────────────────
+// Marcar y desmarcar son insert y delete: la fila existe solo mientras la
+// mención está atendida, así que no hay estado intermedio que mantener.
+
+export async function markMentionDone(noteId, userId) {
+  state.mentionsDone.add(noteId);
+  emit('mention');
+  const { error, status } = await sb.from('mention_states')
+    .insert({ note_id: noteId, user_id: userId });
+  if (error) {
+    state.mentionsDone.delete(noteId);
+    emit('revert');
+    return { error: withStatus(error, status) };
+  }
+  return {};
+}
+
+export async function undoMentionDone(noteId) {
+  state.mentionsDone.delete(noteId);
+  emit('mention');
+  const { error, status } = await sb.from('mention_states').delete().eq('note_id', noteId);
+  if (error) {
+    state.mentionsDone.add(noteId);
+    emit('revert');
+    return { error: withStatus(error, status) };
+  }
+  return {};
+}
+
 // ─────────────────────── catálogos y campos ───────────────────────
 
 export async function addCatalogOption(kind, value) {
@@ -318,11 +370,16 @@ export function startRealtime() {
       const list = notesFor(accId);
       if (payload.eventType === 'DELETE') {
         state.notes.set(accId, list.filter((n) => n.id !== payload.old.id));
+        // La fila de mention_states se ha ido en cascada; la copia en memoria no.
+        state.mentionsDone.delete(payload.old.id);
       } else if (payload.eventType === 'UPDATE') {
         state.notes.set(accId, list.map((n) => (n.id === payload.new.id ? payload.new : n)));
       } else if (!list.some((n) => n.id === payload.new.id)) {
         // Las propias ya se insertaron de forma optimista en addNote().
         state.notes.set(accId, [payload.new, ...list]);
+        // Solo las ajenas llegan hasta aquí, que son las únicas que pueden
+        // traer una mención tuya que merezca un aviso.
+        noteListeners.forEach((fn) => fn(payload.new));
       }
       resyncNotes(accId);
       emit('realtime');

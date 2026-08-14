@@ -113,12 +113,23 @@ export function looksLikeDuplicate(a, b) {
 
 // ─────────────────────────── avisos ───────────────────────────
 let toastTimer = null;
-export function toast(msg, kind = 'ok') {
+// `accion` (opcional) pinta un botón dentro del aviso: {label, fn}. Es donde va
+// el «Deshacer» de una acción que ya se ha hecho — a un lado del mensaje que la
+// anuncia, que es el único sitio donde el usuario está mirando en ese momento.
+export function toast(msg, kind = 'ok', accion = null) {
   const el = document.getElementById('toast');
   if (!el) return;
-  el.textContent = msg;
+  el.innerHTML = escHtml(msg) + (accion
+    ? ` <button type="button" class="toast-act">${escHtml(accion.label)}</button>` : '');
   el.dataset.kind = kind;
   el.hidden = false;
+  if (accion) {
+    el.querySelector('.toast-act').addEventListener('click', () => {
+      clearTimeout(toastTimer);
+      el.hidden = true;
+      accion.fn();
+    });
+  }
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { el.hidden = true; }, kind === 'err' ? 6000 : 3200);
 }

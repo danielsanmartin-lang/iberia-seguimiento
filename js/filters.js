@@ -1,7 +1,8 @@
 // Estado de filtrado y ordenación, KPIs y el desplegable de filtro por columna
 // (el equivalente al autofiltro que tenía el Excel).
 import { state, getValue, ownerName, columnByKey, notesFor } from './store.js';
-import { getProfile } from './auth.js';
+import { getProfile, isFavorite } from './auth.js';
+import { pendingAccountIds } from './mentions.js';
 import { escHtml, todayISO, endOfWeekISO, fmtMonth } from './util.js';
 
 export const filters = {
@@ -9,6 +10,8 @@ export const filters = {
   values: {},        // clave de columna -> Set de valores marcados ('' = vacío)
   datePreset: null,  // 'hoy' | 'semana' | 'vencidos' | 'sinfecha'
   mine: false,
+  fav: false,        // solo mis favoritas
+  mentions: false,   // solo donde me han mencionado y no lo he atendido
 };
 
 export const sort = { key: 'name', dir: 1 };
@@ -42,7 +45,7 @@ function filterLabel(key, value) {
 }
 
 export function hasActiveFilters() {
-  return !!(filters.search || filters.datePreset || filters.mine ||
+  return !!(filters.search || filters.datePreset || filters.mine || filters.fav || filters.mentions ||
     Object.values(filters.values).some((s) => s && s.size));
 }
 
@@ -51,6 +54,8 @@ export function clearFilters() {
   filters.values = {};
   filters.datePreset = null;
   filters.mine = false;
+  filters.fav = false;
+  filters.mentions = false;
 }
 
 // ¿Esta cuenta cae en uno de los cuatro presets de fecha? Un solo juez para el
@@ -76,12 +81,16 @@ function matchesDate(acc) {
 // Un solo juez de "cuenta mía", que comparten el filtro y el tile «Mías». Con dos
 // predicados distintos el número del tile podía dejar de cuadrar con las filas.
 const esMia = (acc) => !!acc.owner_id && acc.owner_id === getProfile()?.id;
+const esFav = (acc) => isFavorite(acc.id);
+// El conjunto se calcula una vez por pasada y no una vez por cuenta: recorrer
+// todas las notas buscando menciones por cada fila sería tirar el trabajo.
+const conMencion = (acc) => pendingAccountIds().has(acc.id);
 
 // `omitir`: Set opcional de dimensiones que NO se aplican ('search' | 'mine' |
-// 'date' | clave de columna). Lo usan los recuentos, porque cada mando de la
-// interfaz cuenta ignorando solo el suyo (ver computeKpis y breakdown). Ninguna
-// columna puede llamarse como esos tres centinelas: las de serie son fijas y las
-// que crea el admin van siempre namespaced a 'custom.<clave>'.
+// 'fav' | 'mentions' | 'date' | clave de columna). Lo usan los recuentos, porque
+// cada mando de la interfaz cuenta ignorando solo el suyo (ver computeKpis y
+// breakdown). Ninguna columna puede llamarse como esos centinelas: las de serie
+// son fijas y las que crea el admin van siempre namespaced a 'custom.<clave>'.
 //
 // OJO al llamarlo: `.filter(matches)` NO vale. filter pasa (elemento, índice) y
 // ese índice llegaría aquí como `omitir`.
@@ -96,6 +105,8 @@ export function matches(acc, omitir) {
     if (!campos && !notesFor(acc.id).some((n) => n.body.toLowerCase().includes(q))) return false;
   }
   if (filters.mine && !omitir?.has('mine') && !esMia(acc)) return false;
+  if (filters.fav && !omitir?.has('fav') && !esFav(acc)) return false;
+  if (filters.mentions && !omitir?.has('mentions') && !conMencion(acc)) return false;
   if (!omitir?.has('date') && !matchesDate(acc)) return false;
 
   for (const [key, set] of Object.entries(filters.values)) {
@@ -171,24 +182,33 @@ export function isFiltered(key) {
 // Las cuatro fechas son un mismo mando, así que comparten base.
 const OMITE_FECHA = new Set(['date']);
 const OMITE_MIAS = new Set(['mine']);
+const OMITE_FAV = new Set(['fav']);
+const OMITE_MENCIONES = new Set(['mentions']);
 
 export function computeKpis() {
   const hoy = todayISO();
   const finSemana = endOfWeekISO();
   const base = state.accounts.filter((a) => matches(a, OMITE_FECHA));
-  const k = { total: base.length, hoy: 0, semana: 0, vencidos: 0, sinfecha: 0, mias: 0 };
+  const k = {
+    total: base.length, hoy: 0, semana: 0, vencidos: 0, sinfecha: 0,
+    mias: 0, favoritas: 0, menciones: 0,
+  };
   for (const a of base) {
     if (enPreset(a, 'sinfecha', hoy, finSemana)) { k.sinfecha++; continue; }
     if (enPreset(a, 'hoy', hoy, finSemana)) k.hoy++;
     if (enPreset(a, 'semana', hoy, finSemana)) k.semana++;
     if (enPreset(a, 'vencidos', hoy, finSemana)) k.vencidos++;
   }
-  // «Mías» es otro mando: respeta el preset de fecha y solo ignora su propio
-  // interruptor, así que lleva pasada propia. Y hay que forzar la condición
-  // además de omitirla: un interruptor ignorado no cuenta a los míos, cuenta a
-  // todo el mundo. esMia va delante porque corta antes de recorrer las notas de
-  // las cuentas ajenas.
-  for (const a of state.accounts) if (esMia(a) && matches(a, OMITE_MIAS)) k.mias++;
+  // «Mías», «Favoritas» y «Menciones» son otros tantos mandos: respetan el
+  // preset de fecha y solo ignoran su propio interruptor, así que llevan pasada
+  // propia. Y hay que forzar la condición además de omitirla: un interruptor
+  // ignorado no cuenta a los míos, cuenta a todo el mundo. El predicado va
+  // delante del matches porque corta antes de recorrer notas ajenas.
+  for (const a of state.accounts) {
+    if (esMia(a) && matches(a, OMITE_MIAS)) k.mias++;
+    if (esFav(a) && matches(a, OMITE_FAV)) k.favoritas++;
+    if (conMencion(a) && matches(a, OMITE_MENCIONES)) k.menciones++;
+  }
   return k;
 }
 
