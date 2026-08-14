@@ -15,7 +15,7 @@ export async function loadProfile() {
   if (!user) { _profile = null; return null; }
   const { data, error } = await sb
     .from('profiles')
-    .select('id, email, full_name, role, must_change_password, is_active, column_prefs')
+    .select('id, email, full_name, role, must_change_password, is_active, column_prefs, favorites')
     .eq('id', user.id)
     .single();
   if (error || !data || data.is_active === false) { _profile = null; return null; }
@@ -57,6 +57,35 @@ export async function saveColumnPrefs(prefs) {
   // Antes esto era fire-and-forget: si fallaba, el usuario colocaba sus columnas,
   // se iba tan contento y las encontraba desordenadas al día siguiente.
   if (error) await writeFailed(withStatus(error, status), 'guardar el orden de las columnas');
+}
+
+// Cuentas favoritas: privadas de cada usuario. Viven en el perfil, como las
+// preferencias de columnas, y por el mismo motivo — te siguen entre
+// dispositivos y no ensucian la tabla compartida con datos de uno solo.
+export function favorites() {
+  return Array.isArray(_profile?.favorites) ? _profile.favorites : [];
+}
+
+export function isFavorite(accountId) {
+  return favorites().includes(accountId);
+}
+
+export async function toggleFavorite(accountId) {
+  if (!_profile) return {};
+  const antes = favorites();
+  const next = antes.includes(accountId)
+    ? antes.filter((id) => id !== accountId)
+    : [...antes, accountId];
+
+  // Optimista: la estrella no puede tardar en encenderse.
+  _profile.favorites = next;
+  const { error, status } = await sb.from('profiles')
+    .update({ favorites: next }).eq('id', _profile.id);
+  if (error) {
+    _profile.favorites = antes;
+    return { error: withStatus(error, status) };
+  }
+  return {};
 }
 
 export function onAuthChange(cb) {

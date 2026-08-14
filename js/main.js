@@ -7,7 +7,8 @@ import { loadAll, startRealtime, stopRealtime } from './store.js';
 import { initNet, netReset, onAuthLost, onReconnect, loadFailed } from './net.js';
 import { initRouter, route } from './router.js';
 import { initGrid, render as renderGrid } from './grid.js';
-import { initPanel } from './panel.js';
+import { initPanel, openNotes } from './panel.js';
+import { initMentions } from './mentions.js';
 import { initImportExport } from './importexport.js';
 import { initAdmin } from './admin.js';
 import { initTheme } from './theme.js';
@@ -182,6 +183,10 @@ async function init() {
   initRouter();
   initGrid();
   initPanel(renderGrid);
+  // La bandeja necesita abrir el historial por la nota exacta. Se le pasa como
+  // función en vez de que mentions.js importe panel.js: panel.js ya importa
+  // mentions.js para pintar los @, y el ciclo se evita mejor que se explica.
+  initMentions({ onOpen: (accountId, noteId) => openNotes(accountId, '', noteId) });
   initImportExport();
   initAdmin(renderGrid);
 

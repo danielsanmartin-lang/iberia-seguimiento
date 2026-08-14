@@ -41,6 +41,11 @@ de notas**. «Actualizado» está disponible pero oculta por defecto.
   quien la firmó, o un admin; si es de otro, el clic abre el historial, que es
   donde puede añadir la suya. Sobre una celda vacía se escribe la primera nota.
 - **Histórico de notas**: un botón abre un popup con solo el historial.
+- **Menciones**: escribe `@` en cualquier nota y sale la lista de compañeros.
+  Vale el nombre completo o el de pila. Ver más abajo.
+- **Favoritas**: la estrella junto al nombre marca una cuenta como tuya de
+  seguimiento cercano, y el tile «Favoritas» las saca de un clic. Son privadas:
+  las tuyas no las ve nadie más.
 - **Filtro por columna** con recuentos, igual que el autofiltro de Excel. La
   columna de fecha agrupa por mes («ago 2026»), no por día.
 - **Buscador global** que entra también dentro de todas las notas, no solo de
@@ -66,11 +71,33 @@ La nota entra como una entrada normal del historial, firmada y fechada.
 **Historial** — Entradas con autor y fecha automáticos; cada uno edita solo lo
 que ha firmado él. Las notas que venían del Excel están marcadas como importadas.
 
-**Panel superior** — Cuentas, Hoy, Esta semana, Vencidos, Sin fecha, Mías y
-recuentos por Owner. Todo clicable: filtra la tabla. Cada número se recalcula con
-los filtros puestos e ignora solo el suyo, así que dice cuántas filas verás al
-pulsarlo (con Owner = Ana, «Vencidos» son las vencidas de Ana) sin que los demás
-se muevan bajo el dedo al usarlos.
+Editar una entrada la corrige, no la duplica, así que **el texto anterior se
+archiva**: la entrada queda marcada como «editada por … · ver versiones» y
+desde ahí se leen los cuerpos anteriores, cada uno con quién lo cambió y cuándo.
+Se guardan **las tres últimas**; a partir de ahí se va tirando la más antigua.
+La marca no cuesta ninguna consulta —una nota editada tiene `updated_at` por
+delante de `created_at`, y eso ya está en memoria—; los textos solo se piden al
+desplegarlos, así que el popup sigue abriéndose sin esperar a la red.
+
+**Menciones** — `@Nombre` dentro de una nota. A quién menciona una nota no se
+guarda en ninguna parte: se deduce de su texto, que es la única fuente de
+verdad, de modo que editar la nota y quitar el `@` retira la mención sola. Lo
+único que se persiste es si tú ya la has atendido.
+
+Quien es mencionado la ve por tres sitios, cada uno con su papel: el **tile
+«Menciones»** filtra la tabla a esas cuentas, la **bandeja** de la cabecera
+—con su insignia— es donde se acciona («Ver» abre el historial por esa entrada
+exacta, «Hecho» la retira, con «Deshacer» de cortesía), y el **chip de color**
+dentro del texto la hace visible desde la propia tabla, resaltada si eres tú.
+Si la mención llega mientras tienes la app abierta, salta un aviso: la nota de
+otro ya viaja por Realtime, así que enterarse no debería exigir recargar. No hay
+correos ni notificaciones del navegador, a propósito.
+
+**Panel superior** — Cuentas, Hoy, Esta semana, Vencidos, Sin fecha, Mías,
+Favoritas, Menciones y recuentos por Owner. Todo clicable: filtra la tabla. Cada
+número se recalcula con los filtros puestos e ignora solo el suyo, así que dice
+cuántas filas verás al pulsarlo (con Owner = Ana, «Vencidos» son las vencidas de
+Ana) sin que los demás se muevan bajo el dedo al usarlos.
 
 **Export** — A `.xlsx` o CSV, exactamente lo que estés viendo (columnas visibles
 × filas filtradas). **No hay importación**: los datos entran por la tabla o por
@@ -144,19 +171,24 @@ js/
   grid.js                 tabla: orden, filtros, edición en celda, selector de columnas
   filters.js              estado de filtrado, KPIs y menú de filtro por columna
   panel.js                ficha lateral, historial de notas y alta de cuentas
+  mentions.js             @menciones: parseo, autocompletado, chips y bandeja
   importexport.js         exportación XLSX/CSV y detector de duplicados
   admin.js                usuarios, catálogos y columnas personalizadas
   util.js                 fechas, escapado, normalización de nombres, avisos
 supabase/
-  migrations/             esquema, RLS y catálogos (0001-0004)
+  migrations/             esquema, RLS y catálogos (0001-0007)
   bootstrap-primer-admin.sql   se ejecuta UNA vez, a mano
   functions/              _shared/auth.ts + admin-create-user + admin-user-action
 ```
 
 ### Modelo de datos
 
-`profiles` · `accounts` · `account_notes` · `catalog_options` · `field_defs` ·
-`heartbeat`.
+`profiles` · `accounts` · `account_notes` · `account_note_versions` ·
+`mention_states` · `catalog_options` · `field_defs` · `heartbeat`.
+
+Las favoritas no tienen tabla: son un `jsonb` en `profiles`, como
+`column_prefs`. Son de una persona y no las lee nadie más, así que no hay nada
+que compartir ni que sincronizar.
 
 RLS deny-by-default con dos helpers en el esquema `private` (no expuesto por
 PostgREST, así que no son invocables como RPC):
@@ -165,10 +197,18 @@ PostgREST, así que no son invocables como RPC):
 |---|---|---|
 | `accounts` | miembro activo | miembro activo (todo) |
 | `account_notes` | miembro activo | añadir: miembro · editar/borrar: autor o admin |
+| `account_note_versions` | miembro activo | **nadie**: solo entra por trigger |
+| `mention_states` | solo las tuyas | solo las tuyas (insert/delete) |
 | `catalog_options` | miembro activo | añadir/renombrar: miembro · borrar: admin |
 | `field_defs` | miembro activo | solo admin |
 | `profiles` | miembro activo | su propia fila; el resto vía Edge Function |
 | `heartbeat` | nadie | nadie (RLS sin políticas) |
+
+`account_note_versions` no tiene ninguna política de escritura a propósito: el
+archivado lo hace un trigger `security definer` al editar la nota, y la limpieza
+sale por el `on delete cascade`. Ninguno de los dos pasa por RLS, así que el
+archivo histórico no se puede tocar desde el navegador — ni siquiera por quien
+firmó la nota.
 
 Tres capas impiden la escalada de privilegios: el trigger de alta fuerza el rol
 `user` ignorando el metadata, `guard_profile_update` revierte `role` e

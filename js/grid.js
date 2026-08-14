@@ -3,7 +3,8 @@
 import {
   state, allColumns, updateField, ownerName, getValue, onChange, addNote, updateNote,
 } from './store.js';
-import { getProfile, isAdmin, saveColumnPrefs } from './auth.js';
+import { getProfile, isAdmin, isFavorite, toggleFavorite, saveColumnPrefs } from './auth.js';
+import { attachMentions, renderNoteBody } from './mentions.js';
 import { DEFAULT_VISIBLE, EDITABLE_TYPES } from './data.js';
 import {
   filters, sort, visibleRows, computeKpis, breakdown, hasActiveFilters,
@@ -14,6 +15,7 @@ import { writeFailed } from './net.js';
 import { openPanel, openNotes } from './panel.js';
 
 const HS_ICON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="6" r="2.6"/><circle cx="6" cy="12" r="3"/><circle cx="17" cy="17.5" r="2.6"/><path d="M8.6 10.6 15.6 7M8.7 13.6l6 3.2"/></svg>';
+const STAR = '<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="m12 3.6 2.6 5.3 5.8.85-4.2 4.1 1 5.75L12 16.9l-5.2 2.7 1-5.75-4.2-4.1 5.8-.85z"/></svg>';
 
 let editing = null;   // { id, key } de la celda abierta
 let pendingRender = false;   // hubo cambios que no se pintaron por estar editando
@@ -98,6 +100,8 @@ function renderKpis() {
       ${kpiTile(k.vencidos, 'Vencidos', filters.datePreset === 'vencidos', 'data-kpi="vencidos"')}
       ${kpiTile(k.sinfecha, 'Sin fecha', filters.datePreset === 'sinfecha', 'data-kpi="sinfecha"')}
       ${kpiTile(k.mias, 'Mías', filters.mine, 'data-kpi="mias"')}
+      ${kpiTile(k.favoritas, 'Favoritas', filters.fav, 'data-kpi="fav" title="Las cuentas que has marcado con la estrella. Son tuyas: los demás no las ven."')}
+      ${kpiTile(k.menciones, 'Menciones', filters.mentions, 'data-kpi="mentions" title="Cuentas donde te han mencionado y no lo has dado por hecho"')}
     </div>
     <div class="chip-row"${owners ? '' : ' hidden'}>${owners}</div>`;
 
@@ -105,6 +109,8 @@ function renderKpis() {
     const k2 = b.dataset.kpi;
     if (k2 === 'todo') clearFilters();
     else if (k2 === 'mias') { filters.mine = !filters.mine; }
+    else if (k2 === 'fav') { filters.fav = !filters.fav; }
+    else if (k2 === 'mentions') { filters.mentions = !filters.mentions; }
     else filters.datePreset = filters.datePreset === k2 ? null : k2;
     document.getElementById('q').value = filters.search;
     render();
@@ -135,7 +141,10 @@ function cellHtml(acc, col) {
     const link = acc.hubspot_url
       ? `<a class="hs-dot" href="${escHtml(acc.hubspot_url)}" target="_blank" rel="noopener"
             title="Abrir en HubSpot" data-stop>${HS_ICON}</a>` : '';
-    return `<span class="gname">${escHtml(acc.name)}</span>${link}`;
+    const fav = isFavorite(acc.id);
+    const estrella = `<button class="fav-dot${fav ? ' on' : ''}" type="button" data-fav
+        title="${fav ? 'Quitar de favoritas' : 'Añadir a favoritas'}">${STAR}</button>`;
+    return `<span class="gname">${escHtml(acc.name)}</span>${estrella}${link}`;
   }
   if (col.type === 'note') {
     // El title de la celda ya está contado (aviso de "sin guardar"): no se pisa
@@ -152,7 +161,8 @@ function cellHtml(acc, col) {
     const tip = stuck ? '' : ` title="${escHtml(firma)}\n${noteEditable(acc)
       ? 'Clic para editarla'
       : 'Solo su autor o un admin pueden editarla. Clic para ver el historial'}"`;
-    return `<div class="gnote"${tip}>${escHtml(n.body)}</div>`;
+    // renderNoteBody escapa y, encima de lo escapado, resalta las menciones.
+    return `<div class="gnote"${tip}>${renderNoteBody(n.body)}</div>`;
   }
   if (col.type === 'noteslog') {
     const n = acc.notes_count || 0;
@@ -361,6 +371,15 @@ function startEdit(cellEl, acc, col) {
   if (ctrl.tagName === 'SELECT') ctrl.addEventListener('change', () => ctrl.blur());
 }
 
+// ───────────────────────── favoritas ─────────────────────────
+
+async function marcarFavorita(acc) {
+  const eraFav = isFavorite(acc.id);
+  const { error } = await toggleFavorite(acc.id);
+  if (error) { await writeFailed(error, eraFav ? 'quitar de favoritas' : 'añadir a favoritas'); return; }
+  render();   // la estrella y el recuento del tile cambian a la vez
+}
+
 // ───────────────── edición de la última nota ─────────────────
 // La nota no se guarda en `accounts` sino en `account_notes`, así que tiene su
 // propio editor: un textarea que crece con el texto y escribe sobre la entrada
@@ -385,6 +404,12 @@ function startNoteEdit(cellEl, acc, col) {
   ta.placeholder = note ? '' : 'Escribe la nota…';
   cellEl.innerHTML = '';
   cellEl.appendChild(ta);
+
+  // ANTES de registrar las teclas del editor: los dos listeners viven en este
+  // mismo textarea y con la lista de menciones abierta manda ella (Escape la
+  // cierra sin cancelar la edición, Enter elige en vez de saltar de línea).
+  // Con los dos listeners en el mismo elemento, decide el orden de registro.
+  attachMentions(ta);
 
   // Crece con el contenido: una nota de seis líneas no se edita por una mirilla.
   const grow = () => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight}px`; };
@@ -663,6 +688,10 @@ export function initGrid() {
     // Un solo clic en «Notas» abre el historial. Va antes que la edición en
     // celda para que el botón no dispare además el editor.
     if (e.target.closest('[data-notes]')) { openNotes(acc.id); return; }
+
+    // La estrella vive dentro de la celda del nombre, así que tiene que cortar
+    // aquí o el mismo clic abriría además el renombrado.
+    if (e.target.closest('[data-fav]')) { marcarFavorita(acc); return; }
 
     const col = allColumns().find((c) => c.key === cell.dataset.k);
     if (!col) return;

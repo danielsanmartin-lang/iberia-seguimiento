@@ -250,6 +250,23 @@ main{padding:18px;max-width:100%}
   display:block;font-family:inherit;
 }
 
+/* Estrella de favorita, junto al nombre. Apagada hasta que se pasa por encima
+   de la fila: 400 estrellas huecas encendidas serían ruido en toda la columna. */
+.fav-dot{
+  flex:none;display:inline-grid;place-items:center;width:20px;height:20px;padding:0;
+  border:0;background:none;color:var(--ink4);cursor:pointer;border-radius:4px;
+  opacity:0;transition:opacity .12s,color .12s;
+}
+.grow:hover .fav-dot,.fav-dot.on,.fav-dot:focus-visible{opacity:1}
+.fav-dot:hover{color:var(--amber-dk)}
+.fav-dot.on{color:var(--amber-dk)}
+.fav-dot.on svg{fill:currentColor}
+
+/* Mención dentro del texto de una nota. La tuya salta a la vista; la de otro
+   solo se distingue lo justo para saber que ahí hay una persona nombrada. */
+.mention{color:var(--teal-dk);font-weight:600}
+.mention.me{background:var(--teal-bg);border-radius:4px;padding:0 3px}
+
 .due.late{color:var(--red-dk);font-weight:700}
 .due.today{color:var(--amber-dk);font-weight:700}
 .ncount{background:var(--line);color:var(--ink2);border-radius:999px;padding:1px 7px;
@@ -338,6 +355,20 @@ main{padding:18px;max-width:100%}
 .note-edit-acts{display:flex;gap:6px;margin-top:6px}
 .note-edit-acts button{border:1px solid var(--line2);background:var(--surface);color:var(--ink);
   font:inherit;font-size:12px;padding:4px 10px;border-radius:var(--rs);cursor:pointer}
+/* Entrada a la que llegas desde la bandeja de menciones: se marca unos segundos
+   para no dejarte buscando cuál de las quince era. */
+.note.note-hl{border-color:var(--teal);box-shadow:0 0 0 3px var(--focus-ring)}
+/* Rastro de una edición. Discreto: informa, no acusa. */
+.note-edited{margin-top:6px;font-size:11px;color:var(--ink4)}
+.note-edited button{border:0;background:none;font:inherit;color:var(--teal-dk);
+  cursor:pointer;padding:0;text-decoration:underline}
+.note-versions{margin-top:8px;border-top:1px dashed var(--line2);padding-top:8px;display:grid;gap:8px}
+.note-version{font-size:12.5px;color:var(--ink3);word-break:break-word}
+/* El pre-wrap va en el cuerpo y no en el envoltorio: si envuelve a todo, la
+   sangría del propio HTML se pinta como huecos enormes entre versiones. */
+.note-version>div{white-space:pre-wrap}
+.note-version .muted{display:block;font-size:11px;margin-bottom:2px}
+.note-version-pie{font-size:11px;margin:0}
 .tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
   padding:1px 6px;border-radius:999px;background:var(--line);color:var(--ink3)}
 .tag.warn{background:var(--amber-bg);color:var(--amber-dk)}
@@ -399,6 +430,42 @@ main{padding:18px;max-width:100%}
   font-size:13px;font-weight:600;box-shadow:var(--shadow-lg);max-width:min(560px,92vw);text-align:center;
 }
 #toast[data-kind="err"]{background:var(--red-dk);color:#fff}
+/* Acción dentro del aviso («Deshacer», «Ver»): el único sitio donde el usuario
+   está mirando justo después de hacer algo. */
+.toast-act{border:0;background:rgba(255,255,255,.18);color:inherit;font:inherit;font-weight:700;
+  cursor:pointer;padding:2px 10px;border-radius:999px;margin-left:6px}
+.toast-act:hover{background:rgba(255,255,255,.32)}
+
+/* ─────────────────── menciones ─────────────────── */
+#btnMentions{position:relative}
+.mn-badge{
+  position:absolute;top:1px;right:1px;min-width:15px;height:15px;padding:0 4px;
+  display:grid;place-items:center;border-radius:999px;background:var(--teal);color:#fff;
+  font-size:10px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;
+}
+/* Lista del autocompletado al escribir @. */
+.mn-list{
+  position:fixed;z-index:120;min-width:200px;max-width:260px;padding:4px;
+  background:var(--surface);border:1px solid var(--line2);border-radius:var(--r);
+  box-shadow:var(--shadow-lg);display:grid;gap:1px;
+}
+.mn-opt{
+  text-align:left;border:0;background:none;font:inherit;font-size:12.5px;color:var(--ink);
+  padding:6px 8px;border-radius:var(--rs);cursor:pointer;
+}
+.mn-opt:hover,.mn-opt.on{background:var(--teal-bg);color:var(--teal-dk)}
+/* Bandeja. */
+.mn-menu{width:min(380px,calc(100vw - 24px))}
+.mn-inbox{max-height:min(420px,60vh);overflow:auto;display:grid;gap:8px;padding:8px}
+.mn-item{border:1px solid var(--line);border-radius:var(--r);padding:9px 11px;background:var(--surface2)}
+.mn-item header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;font-size:12px;margin-bottom:4px}
+.mn-item header .muted{font-size:11px}
+.mn-item p{margin:0;font-size:12.5px;color:var(--ink2);white-space:pre-wrap;word-break:break-word}
+.mn-acts{display:flex;gap:6px;margin-top:8px}
+.mn-acts button{border:1px solid var(--line2);background:var(--surface);color:var(--ink);
+  font:inherit;font-size:12px;padding:3px 10px;border-radius:var(--rs);cursor:pointer}
+.mn-acts button:hover{border-color:var(--teal);background:var(--teal-bg);color:var(--teal-dk)}
+.mn-vacio{padding:14px 4px;text-align:center;font-size:12.5px}
 
 /* ─────────────────────────── móvil ─────────────────────────── */
 @media (max-width:760px){
