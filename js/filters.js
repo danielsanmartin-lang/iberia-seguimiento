@@ -3,12 +3,12 @@
 import { state, getValue, ownerName, columnByKey, notesFor } from './store.js';
 import { getProfile, isFavorite } from './auth.js';
 import { pendingAccountIds } from './mentions.js';
-import { escHtml, todayISO, endOfWeekISO, fmtMonth } from './util.js';
+import { escHtml, todayISO, endOfWeekISO, inDaysISO, fmtMonth } from './util.js';
 
 export const filters = {
   search: '',
   values: {},        // clave de columna -> Set de valores marcados ('' = vacío)
-  datePreset: null,  // 'hoy' | 'semana' | 'vencidos' | 'sinfecha'
+  datePreset: null,  // 'hoy' | 'semana' | 'prox7' | 'prox30' | 'vencidos' | 'sinfecha'
   mine: false,
   fav: false,        // solo mis favoritas
   mentions: false,   // solo donde me han mencionado y no lo he atendido
@@ -58,24 +58,39 @@ export function clearFilters() {
   filters.mentions = false;
 }
 
-// ¿Esta cuenta cae en uno de los cuatro presets de fecha? Un solo juez para el
-// filtro y para los KPIs: el número del tile tiene que salir del mismo cálculo
-// que las filas que salen al pulsarlo, no de otro que dé lo mismo por poco.
-// 'hoy' y 'finSemana' entran como parámetros porque el bucle de KPIs los calcula
-// una vez, mientras que aquí se llamaría una vez por cuenta.
-function enPreset(acc, preset, hoy, finSemana) {
+// Los límites de los presets de fecha, calculados de una vez. El bucle de KPIs
+// los pasa a enPreset() en lugar de recalcularlos por cuenta.
+function limites() {
+  return {
+    hoy: todayISO(),
+    finSemana: endOfWeekISO(),
+    fin7: inDaysISO(7),
+    fin30: inDaysISO(30),
+  };
+}
+
+// ¿Esta cuenta cae en uno de los presets de fecha? Un solo juez para el filtro y
+// para los KPIs: el número del tile tiene que salir del mismo cálculo que las
+// filas que salen al pulsarlo, no de otro que dé lo mismo por poco.
+//
+// No son cortes disjuntos y no pretenden serlo, son horizontes encajados: 'hoy'
+// cae dentro de 'semana', 'semana' (de hoy al domingo) dentro de 'prox7', y ese
+// dentro de 'prox30'.
+function enPreset(acc, preset, L) {
   const d = acc.next_touch;
   if (preset === 'sinfecha') return !d;
   if (!d) return false;
-  if (preset === 'vencidos') return d < hoy;
-  if (preset === 'hoy') return d === hoy;
-  if (preset === 'semana') return d >= hoy && d <= finSemana;
+  if (preset === 'vencidos') return d < L.hoy;
+  if (preset === 'hoy') return d === L.hoy;
+  if (preset === 'semana') return d >= L.hoy && d <= L.finSemana;
+  if (preset === 'prox7') return d >= L.hoy && d <= L.fin7;
+  if (preset === 'prox30') return d >= L.hoy && d <= L.fin30;
   return true;
 }
 
 function matchesDate(acc) {
   if (!filters.datePreset) return true;
-  return enPreset(acc, filters.datePreset, todayISO(), endOfWeekISO());
+  return enPreset(acc, filters.datePreset, limites());
 }
 
 // Un solo juez de "cuenta mía", que comparten el filtro y el tile «Mías». Con dos
@@ -175,29 +190,30 @@ export function isFiltered(key) {
 
 // ─────────────────────────── KPIs ───────────────────────────
 // Cada tile dice cuántas filas verás al pulsarlo: respeta los demás filtros e
-// ignora solo el suyo. Contar sobre el total dejaba los seis números clavados al
+// ignora solo el suyo. Contar sobre el total dejaba los números clavados al
 // filtrar por owner (el tile decía 10 vencidas y en la tabla había una); contar
 // sobre lo filtrado los movería bajo el dedo, porque pulsar «Vencidos» dejaría
 // «Hoy» en 0 y no quedaría desde dónde volver.
-// Las cuatro fechas son un mismo mando, así que comparten base.
+// Los presets de fecha son un mismo mando, así que comparten base.
 const OMITE_FECHA = new Set(['date']);
 const OMITE_MIAS = new Set(['mine']);
 const OMITE_FAV = new Set(['fav']);
 const OMITE_MENCIONES = new Set(['mentions']);
 
 export function computeKpis() {
-  const hoy = todayISO();
-  const finSemana = endOfWeekISO();
+  const L = limites();
   const base = state.accounts.filter((a) => matches(a, OMITE_FECHA));
   const k = {
-    total: base.length, hoy: 0, semana: 0, vencidos: 0, sinfecha: 0,
+    total: base.length, hoy: 0, semana: 0, prox7: 0, prox30: 0, vencidos: 0, sinfecha: 0,
     mias: 0, favoritas: 0, menciones: 0,
   };
   for (const a of base) {
-    if (enPreset(a, 'sinfecha', hoy, finSemana)) { k.sinfecha++; continue; }
-    if (enPreset(a, 'hoy', hoy, finSemana)) k.hoy++;
-    if (enPreset(a, 'semana', hoy, finSemana)) k.semana++;
-    if (enPreset(a, 'vencidos', hoy, finSemana)) k.vencidos++;
+    if (enPreset(a, 'sinfecha', L)) { k.sinfecha++; continue; }
+    if (enPreset(a, 'hoy', L)) k.hoy++;
+    if (enPreset(a, 'semana', L)) k.semana++;
+    if (enPreset(a, 'prox7', L)) k.prox7++;
+    if (enPreset(a, 'prox30', L)) k.prox30++;
+    if (enPreset(a, 'vencidos', L)) k.vencidos++;
   }
   // «Mías», «Favoritas» y «Menciones» son otros tantos mandos: respetan el
   // preset de fecha y solo ignoran su propio interruptor, así que llevan pasada
