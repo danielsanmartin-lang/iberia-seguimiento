@@ -30,6 +30,30 @@ export function fmtMonth(ym) {
   return `${MESES[Number(m) - 1] || '?'} ${y}`;
 }
 
+const MESES_LARGOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+// '2026-09' → 'Septiembre'. El año solo se pone si no es el que corre: en un
+// rótulo que se lee de pasada, "Septiembre 2026" estando en 2026 es ruido.
+export function fmtMonthLong(ym) {
+  const [y, m] = String(ym).split('-');
+  const nombre = MESES_LARGOS[Number(m) - 1] || '?';
+  return Number(y) === new Date().getFullYear() ? nombre : `${nombre} ${y}`;
+}
+
+// '2026-08-31' + '2026-09-06' → '31 Agosto – 6 Septiembre'. Un solo día no se
+// repite, y el año aparece únicamente si el tramo se sale del año en curso.
+export function fmtRangeLong(desde, hasta) {
+  const dia = (iso) => {
+    const [, m, d] = String(iso).split('-');
+    return `${Number(d)} ${MESES_LARGOS[Number(m) - 1] || '?'}`;
+  };
+  const anyo = new Date().getFullYear();
+  const cola = [desde, hasta].some((iso) => Number(String(iso).slice(0, 4)) !== anyo)
+    ? ` ${String(hasta).slice(0, 4)}` : '';
+  return desde === hasta ? `${dia(desde)}${cola}` : `${dia(desde)} – ${dia(hasta)}${cola}`;
+}
+
 export function fmtDateTime(ts) {
   if (!ts) return '';
   const d = new Date(ts);
@@ -60,9 +84,16 @@ export function endOfWeekISO() {
   return isoOf(d);
 }
 
-// Fin de la semana natural siguiente (domingo), para el KPI "próxima semana". Esa
-// semana va desde el día siguiente a endOfWeekISO() hasta aquí: lunes a domingo
-// enteros, aunque hoy sea domingo.
+// La semana natural siguiente, de lunes a domingo enteros, para el KPI "próxima
+// semana". Empieza el día siguiente al que cierra endOfWeekISO(), también cuando
+// hoy es domingo (entonces "la que viene" arranca mañana).
+export function startOfNextWeekISO() {
+  const d = new Date();
+  const dow = (d.getDay() + 6) % 7;       // 0 = lunes
+  d.setDate(d.getDate() + (7 - dow));
+  return isoOf(d);
+}
+
 export function endOfNextWeekISO() {
   const d = new Date();
   const dow = (d.getDay() + 6) % 7;       // 0 = lunes

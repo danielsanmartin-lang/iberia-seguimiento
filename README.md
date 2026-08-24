@@ -101,7 +101,10 @@ Ana, «Vencidos» son las vencidas de Ana) sin que los demás se muevan bajo el 
 al usarlos. Los tramos de fecha se solapan a propósito: «Esta semana» va de hoy al
 domingo y «Próxima semana» es la semana natural siguiente, mientras que «Mes
 actual» y «Próximo mes» son meses naturales enteros —así que el primero incluye
-también lo que ya venció este mes—.
+también lo que ya venció este mes—. Pasando el ratón por encima, cada tile de
+fecha enseña su tramo real («31 Agosto – 6 Septiembre», «Septiembre»), calculado
+en cada pintado; el rótulo lo dibuja el CSS y no el `title` del navegador, que
+tarda casi un segundo en aparecer.
 
 **Export** — A `.xlsx` o CSV, exactamente lo que estés viendo (columnas visibles
 × filas filtradas). **No hay importación**: los datos entran por la tabla o por

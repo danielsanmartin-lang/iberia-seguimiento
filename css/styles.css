@@ -149,10 +149,23 @@ main{padding:18px;max-width:100%}
 .kpis{margin-bottom:12px}
 .kpi-row{display:flex;gap:8px;flex-wrap:wrap}
 .kpi{
+  position:relative;
   flex:1 1 120px;min-width:110px;text-align:left;cursor:pointer;
   background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
   padding:9px 12px;display:grid;gap:1px;transition:border-color .12s,background .12s;
 }
+/* El tramo de fechas del tile. Sale al instante y sin animación —el aviso nativo
+   del navegador tarda casi un segundo, y esto se mira de pasada—. Va debajo del
+   tile para no taparse con la cabecera fija. */
+.kpi[data-tip]::after{
+  content:attr(data-tip);display:none;
+  position:absolute;top:calc(100% + 6px);left:0;z-index:30;
+  padding:5px 9px;border-radius:var(--rs);white-space:nowrap;
+  background:var(--ink);color:var(--surface);
+  font-size:11.5px;font-weight:600;letter-spacing:0;text-transform:none;
+  box-shadow:var(--shadow);
+}
+.kpi[data-tip]:hover::after,.kpi[data-tip]:focus-visible::after{display:block}
 .kpi:hover{border-color:var(--teal-bd);background:var(--surface2)}
 .kpi.on{border-color:var(--teal);background:var(--teal-bg)}
 .kpi-v{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink)}

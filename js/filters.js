@@ -3,7 +3,10 @@
 import { state, getValue, ownerName, columnByKey, notesFor } from './store.js';
 import { getProfile, isFavorite } from './auth.js';
 import { pendingAccountIds } from './mentions.js';
-import { escHtml, todayISO, endOfWeekISO, endOfNextWeekISO, monthKeyISO, fmtMonth } from './util.js';
+import {
+  escHtml, todayISO, endOfWeekISO, startOfNextWeekISO, endOfNextWeekISO, monthKeyISO,
+  fmtMonth, fmtMonthLong, fmtRangeLong,
+} from './util.js';
 
 export const filters = {
   search: '',
@@ -64,6 +67,7 @@ function limites() {
   return {
     hoy: todayISO(),
     finSemana: endOfWeekISO(),
+    iniProxSemana: startOfNextWeekISO(),
     finProxSemana: endOfNextWeekISO(),
     mes: monthKeyISO(),
     proxMes: monthKeyISO(1),
@@ -85,10 +89,24 @@ function enPreset(acc, preset, L) {
   if (preset === 'vencidos') return d < L.hoy;
   if (preset === 'hoy') return d === L.hoy;
   if (preset === 'semana') return d >= L.hoy && d <= L.finSemana;
-  if (preset === 'proxsemana') return d > L.finSemana && d <= L.finProxSemana;
+  if (preset === 'proxsemana') return d >= L.iniProxSemana && d <= L.finProxSemana;
   if (preset === 'mes') return String(d).slice(0, 7) === L.mes;
   if (preset === 'proxmes') return String(d).slice(0, 7) === L.proxMes;
   return true;
+}
+
+// El tramo de fechas que abarca cada preset, en cristiano, para el rótulo del
+// tile. Sale de los mismos límites que enPreset(), así que no puede prometer un
+// rango distinto del que filtra, y se recalcula en cada pintado: la semana que
+// viene dirá otra cosa sin que nadie la toque.
+export function rangoPreset(preset) {
+  const L = limites();
+  if (preset === 'hoy') return fmtRangeLong(L.hoy, L.hoy);
+  if (preset === 'semana') return fmtRangeLong(L.hoy, L.finSemana);
+  if (preset === 'proxsemana') return fmtRangeLong(L.iniProxSemana, L.finProxSemana);
+  if (preset === 'mes') return fmtMonthLong(L.mes);
+  if (preset === 'proxmes') return fmtMonthLong(L.proxMes);
+  return '';
 }
 
 function matchesDate(acc) {

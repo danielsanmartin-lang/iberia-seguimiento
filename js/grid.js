@@ -8,7 +8,7 @@ import { attachMentions, renderNoteBody } from './mentions.js';
 import { DEFAULT_VISIBLE, EDITABLE_TYPES } from './data.js';
 import {
   filters, sort, visibleRows, computeKpis, breakdown, hasActiveFilters,
-  clearFilters, isFiltered, openFilterMenu, closeFilterMenu, cellValue,
+  clearFilters, isFiltered, openFilterMenu, closeFilterMenu, cellValue, rangoPreset,
 } from './filters.js';
 import { escHtml, fmtDate, fmtDateTime, daysFromToday, toast } from './util.js';
 import { writeFailed } from './net.js';
@@ -65,8 +65,12 @@ async function setPrefs(next) {
 
 // ─────────────────────────── pintado ───────────────────────────
 
-function kpiTile(value, label, active, attr) {
-  return `<button class="kpi${active ? ' on' : ''}" ${attr} type="button">
+// `tip`: el tramo de fechas del tile. Va en data-tip y lo pinta el CSS al vuelo,
+// no en title: el aviso del navegador tarda casi un segundo en salir y esto se
+// consulta de pasada, mirando y siguiendo.
+function kpiTile(value, label, active, attr, tip) {
+  const t = tip ? ` data-tip="${escHtml(tip)}"` : '';
+  return `<button class="kpi${active ? ' on' : ''}" ${attr}${t} type="button">
     <span class="kpi-v">${value}</span><span class="kpi-l">${escHtml(label)}</span></button>`;
 }
 
@@ -95,11 +99,11 @@ function renderKpis() {
   el.innerHTML = `
     <div class="kpi-row">
       ${kpiTile(k.total, 'Cuentas', !hasActiveFilters(), attrTodo)}
-      ${kpiTile(k.hoy, 'Hoy', filters.datePreset === 'hoy', 'data-kpi="hoy"')}
-      ${kpiTile(k.semana, 'Esta semana', filters.datePreset === 'semana', 'data-kpi="semana"')}
-      ${kpiTile(k.proxsemana, 'Próxima semana', filters.datePreset === 'proxsemana', 'data-kpi="proxsemana" title="Lunes a domingo de la semana que viene"')}
-      ${kpiTile(k.mes, 'Mes actual', filters.datePreset === 'mes', 'data-kpi="mes" title="Todo lo que cae en este mes natural, lo ya vencido incluido"')}
-      ${kpiTile(k.proxmes, 'Próximo mes', filters.datePreset === 'proxmes', 'data-kpi="proxmes" title="Todo lo que cae en el mes natural siguiente"')}
+      ${kpiTile(k.hoy, 'Hoy', filters.datePreset === 'hoy', 'data-kpi="hoy"', rangoPreset('hoy'))}
+      ${kpiTile(k.semana, 'Esta semana', filters.datePreset === 'semana', 'data-kpi="semana"', rangoPreset('semana'))}
+      ${kpiTile(k.proxsemana, 'Próxima semana', filters.datePreset === 'proxsemana', 'data-kpi="proxsemana"', rangoPreset('proxsemana'))}
+      ${kpiTile(k.mes, 'Mes actual', filters.datePreset === 'mes', 'data-kpi="mes"', rangoPreset('mes'))}
+      ${kpiTile(k.proxmes, 'Próximo mes', filters.datePreset === 'proxmes', 'data-kpi="proxmes"', rangoPreset('proxmes'))}
       ${kpiTile(k.vencidos, 'Vencidos', filters.datePreset === 'vencidos', 'data-kpi="vencidos"')}
       ${kpiTile(k.sinfecha, 'Sin fecha', filters.datePreset === 'sinfecha', 'data-kpi="sinfecha"')}
       ${kpiTile(k.mias, 'Mías', filters.mine, 'data-kpi="mias"')}
