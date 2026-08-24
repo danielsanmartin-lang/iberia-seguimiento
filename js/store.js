@@ -188,6 +188,59 @@ export async function updateField(id, key, value) {
   return {};
 }
 
+// El mismo cambio sobre varias cuentas, en UNA petición. Es a updateField lo que
+// createAccounts es a createAccount. Con un bucle de updateField serían N
+// peticiones, N repintados y la posibilidad de quedarse a medias: aquí o entran
+// todas o no entra ninguna.
+//
+// Solo campos de primer nivel (Owner y Fecha son los que ofrece la barra de
+// selección); los personalizados viven en un jsonb y se editan uno a uno.
+//
+// `derivados` fuerza los campos que normalmente se calculan solos. Lo usa el
+// «Deshacer»: al devolver el owner hay que reponer el owner_name que había,
+// porque en las cuentas venidas del Excel hay nombre sin usuario y derivarlo
+// del owner_id lo borraría.
+export async function updateFieldMany(ids, key, value, derivados = null) {
+  const accs = ids.map((id) => state.byId.get(id)).filter(Boolean);
+  if (!accs.length) return { updated: 0 };
+
+  const patch = { [key]: value === '' ? null : value };
+  if (key === 'owner_id') {
+    const p = state.profiles.find((x) => x.id === value);
+    patch.owner_name = p ? (p.full_name || p.email) : null;
+  }
+  if (derivados) Object.assign(patch, derivados);
+  // El valor anterior de CADA fila, para poder devolverlas a su sitio: el patch
+  // es uno solo, pero lo que había debajo era distinto en cada una.
+  const prev = new Map(accs.map((a) => [a.id, key === 'owner_id'
+    ? { owner_id: a.owner_id, owner_name: a.owner_name }
+    : { [key]: a[key] }]));
+
+  accs.forEach((a) => Object.assign(a, patch));
+  emit('optimistic');
+
+  const { data, error, status } = await sb.from('accounts')
+    .update(patch).in('id', accs.map((a) => a.id)).select();
+  if (error) {
+    accs.forEach((a) => Object.assign(a, prev.get(a.id)));
+    emit('revert');
+    return { error: withStatus(error, status) };
+  }
+  for (const row of data || []) {
+    const a = state.byId.get(row.id);
+    if (!a) continue;
+    // Como en updateField: la respuesta no trae lo que se calcula desde las
+    // notas, así que se preserva.
+    Object.assign(a, row, {
+      custom: row.custom || {},
+      notes_count: a.notes_count,
+      last_note: a.last_note,
+    });
+  }
+  emit('save');
+  return { updated: (data || []).length, prev };
+}
+
 export async function createAccount(fields) {
   const { data, error, status } = await sb.from('accounts').insert(fields).select().single();
   if (error) return { error: withStatus(error, status) };

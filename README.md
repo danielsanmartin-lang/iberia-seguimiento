@@ -46,6 +46,13 @@ de notas**. «Actualizado» está disponible pero oculta por defecto.
 - **Favoritas**: la estrella junto al nombre marca una cuenta como tuya de
   seguimiento cercano, y el tile «Favoritas» las saca de un clic. Son privadas:
   las tuyas no las ve nadie más.
+- **Selección múltiple**: la casilla de la izquierda marca filas (con `Shift`,
+  un rango; la de la cabecera, todo lo que hay filtrado) y aparece una barra
+  para cambiarles el **owner** o la **fecha** de una vez. Va en una sola
+  escritura —o entran todas o no entra ninguna— y el aviso deja un
+  **«Deshacer»** que devuelve cada cuenta a lo que tenía, no a un valor común.
+  Es lo único que el Excel hacía mejor: reasignar una cartera eran diez
+  ediciones celda a celda.
 - **Filtro por columna** con recuentos, igual que el autofiltro de Excel. La
   columna de fecha agrupa por mes («ago 2026»), no por día.
 - **Buscador global** que entra también dentro de todas las notas, no solo de
@@ -61,7 +68,15 @@ de notas**. «Actualizado» está disponible pero oculta por defecto.
 URL de HubSpot. Nada más: el historial tiene su propio popup y la fecha se edita
 en su columna, así que no se repiten aquí.
 
-**Alta de cuenta** — Además de esos campos, el diálogo pide **fecha de
+**Alta de cuenta** — Mientras escribes el nombre, un aviso lista las cuentas que
+podrían ser la misma empresa y **cada una se abre desde ahí**: casi siempre lo
+que se buscaba era la que ya existe. Si el nombre coincide con uno ya usado
+—normalizado, así que «Allianz España, S.A.» topa con «allianz espana sa»—, el
+primer clic en «Crear» no crea nada: lo dice y se queda en «Crear igualmente»,
+que sí crea. Las parecidas solo avisan; «Aena» y «Aena Internacional» son dos
+empresas y frenar ahí sería un incordio diario.
+
+Además de esos campos, el diálogo pide **fecha de
 seguimiento** y **primera nota**. Sí se repiten aquí, al revés que en la ficha, y
 es a propósito: cuando das de alta una cuenta acabas de hablar con alguien, sabes
 cuándo toca volver y tienes algo que contar. Dejarlo para después significaba

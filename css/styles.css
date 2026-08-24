@@ -95,6 +95,10 @@ textarea{resize:vertical}
 .msg.err,.err-box{background:var(--red-bg);border-color:var(--red-bd);color:var(--red-dk)}
 .msg.ok{background:var(--green-bg);border-color:var(--green-bd);color:var(--green)}
 .msg.warn{background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber-dk)}
+/* Los candidatos a duplicado del alta se abren desde el propio aviso. */
+#nDup button{border:0;background:transparent;color:inherit;font:inherit;font-weight:700;
+  text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:0}
+#nDup button:hover{opacity:.72}
 .err-box{padding:10px 12px;border-radius:var(--rs);border:1px solid var(--red-bd)}
 
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--rl);
@@ -189,6 +193,19 @@ main{padding:18px;max-width:100%}
 .count{font-size:12px;color:var(--ink3);font-variant-numeric:tabular-nums;margin-right:4px}
 .hint{font-size:11.5px;color:var(--ink4);margin:9px 2px 0}
 
+/* Acciones en bloque: solo aparece con filas marcadas. */
+.bulkbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;
+  padding:7px 10px;border:1px solid var(--teal-bd);background:var(--teal-bg);
+  border-radius:var(--r);
+}
+.bulk-n{font-size:12.5px;font-weight:700;color:var(--teal-dk);font-variant-numeric:tabular-nums}
+/* La fila de fecha del desplegable: el input manda y «Aplicar» no ocupa el
+   ancho entero como el resto de botones del menú mini. */
+.bulk-date{display:flex;gap:6px;padding:5px 6px 8px}
+.bulk-date input{flex:1;min-width:0}
+.fmenu.mini .bulk-date button{width:auto;flex:none;padding:6px 10px}
+
 /* ─────────────────────────── tabla ───────────────────────────
    Rejilla CSS en lugar de <table>: permite fijar la cabecera, redefinir las
    columnas en runtime según lo que el usuario elija ver, y editar en celda.  */
@@ -222,6 +239,15 @@ main{padding:18px;max-width:100%}
   border-radius:4px;background:var(--amber-bg)}
 .grow:not(.ghead) .gc.editable:hover{box-shadow:inset 0 0 0 1px var(--teal-bd);border-radius:4px}
 .gc.editing{padding:2px 4px;overflow:visible}
+/* Casilla de selección: discreta hasta que hace falta. Aparece al pasar el ratón
+   por la fila y se queda fija en cuanto hay algo marcado, para no perder de
+   vista lo que está seleccionado mientras se recorre la tabla. */
+.gsel{padding:7px 0;justify-content:center;align-items:center}
+.gsel input{cursor:pointer;margin:0;opacity:0;transition:opacity .1s}
+.grow:hover .gsel input,.gtable.has-sel .gsel input,.ghead .gsel input:indeterminate,
+.gsel input:checked,.gsel input:focus-visible{opacity:1}
+.grow.selected{background:var(--teal-bg)}
+.grow.selected:hover{background:var(--teal-bd)}
 .gh{padding:0;position:relative;cursor:grab;user-select:none}
 .gh:active{cursor:grabbing}
 /* Columna que se está arrastrando: se apaga para que la vista se centre en el

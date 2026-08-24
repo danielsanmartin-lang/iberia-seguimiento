@@ -86,10 +86,16 @@
   </div>
 
   <div id="grid" class="grid-wrap"></div>
+  <!-- Barra de acciones en bloque. En el flujo y DEBAJO de la tabla: flotante
+       chocaría con el aviso (#toast), y encima empujaría las filas hacia abajo
+       justo al marcar la primera, moviéndolas bajo el ratón. La tabla tiene su
+       propio scroll y altura acotada, así que aquí siempre se ve. -->
+  <div id="bulkBar" class="bulkbar" hidden></div>
   <p class="hint">Clic en una celda para editarla, también en la <b>última nota</b> (se guarda al salir, <b>Esc</b> cancela) ·
      doble clic en el <b>nombre</b> para abrir la ficha · botón <b>Notas</b> para el historial completo ·
      el embudo de cada columna filtra como el autofiltro de Excel ·
-     <b>arrastra una cabecera</b> para mover la columna de sitio.</p>
+     <b>arrastra una cabecera</b> para mover la columna de sitio ·
+     <b>marca varias filas</b> (con <b>Shift</b> para un rango) y cámbiales el owner o la fecha de una vez.</p>
 </main>
 
 <!-- ────────────────────── ficha lateral ────────────────────── -->

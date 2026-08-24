@@ -7,7 +7,7 @@ import {
 import { getProfile, isAdmin } from './auth.js';
 import { attachMentions, renderNoteBody } from './mentions.js';
 import { writeFailed } from './net.js';
-import { escHtml, fmtDateTime, toast, looksLikeDuplicate } from './util.js';
+import { escHtml, fmtDateTime, toast, looksLikeDuplicate, normalizeName } from './util.js';
 
 let currentId = null;
 let afterChange = () => {};
@@ -311,25 +311,47 @@ function initNewDialog() {
       .map((c) => `<label class="fld"><span>${escHtml(c.label)}</span>
         ${fieldControl({ custom: {} }, c)}</label>`).join('');
     dlg.querySelector('#nDup').hidden = true;
+    desarmarCrear(dlg);
     dlg.showModal();
     dlg.querySelector('#nName').focus();
   });
 
-  // Aviso de duplicado mientras se escribe: es el momento útil, no después.
+  // Aviso de duplicado mientras se escribe: es el momento útil, no después. Y
+  // los candidatos se abren desde el propio aviso —igual que en la revisión de
+  // duplicados—, porque casi siempre lo que se quería era ir a la que ya existe,
+  // no crear otra.
   dlg.querySelector('#nName').addEventListener('input', (e) => {
     const q = e.target.value.trim();
     const warn = dlg.querySelector('#nDup');
+    desarmarCrear(dlg);   // otro nombre, otra decisión: el «Crear igualmente» caduca
     if (q.length < 3) { warn.hidden = true; return; }
     const hits = state.accounts.filter((a) => looksLikeDuplicate(a.name, q)).slice(0, 4);
     if (!hits.length) { warn.hidden = true; return; }
-    warn.hidden = false;
-    warn.innerHTML = `Ya existe algo parecido: ${hits.map((h) => `<b>${escHtml(h.name)}</b>`).join(', ')}`;
+    pintarAviso(warn, 'Ya existe algo parecido:', hits);
   });
 
   dlg.querySelector('#nCancel').addEventListener('click', () => dlg.close());
   dlg.querySelector('#nCreate').addEventListener('click', async () => {
     const name = dlg.querySelector('#nName').value.trim();
     if (!name) { toast('Pon un nombre de cuenta.', 'err'); return; }
+
+    // Freno cuando el nombre ya está usado. Solo con coincidencia exacta una vez
+    // normalizada («Allianz España, S.A.» = «allianz espana sa»): las parecidas
+    // avisan pero no frenan, porque «Aena» y «Aena Internacional» son dos
+    // empresas y pedir confirmación ahí sería un incordio diario.
+    //
+    // El freno es un segundo clic sobre el mismo botón, no un confirm() del
+    // navegador: el diálogo ya está abierto y un modal encima de otro se lee mal.
+    const btn = dlg.querySelector('#nCreate');
+    if (!btn.dataset.armed) {
+      const iguales = state.accounts.filter((a) => normalizeName(a.name) === normalizeName(name));
+      if (iguales.length) {
+        pintarAviso(dlg.querySelector('#nDup'), 'Esta cuenta ya existe:', iguales);
+        btn.dataset.armed = '1';
+        btn.textContent = 'Crear igualmente';
+        return;
+      }
+    }
     const ownerId = dlg.querySelector('#nOwner').value || null;
     const owner = state.profiles.find((p) => p.id === ownerId);
 
@@ -379,6 +401,23 @@ function initNewDialog() {
     toast(`«${account.name}» creada.`);
     openPanel(account.id);
   });
+}
+
+// El aviso con los candidatos, cada uno abrible. Se cierra el diálogo al abrir:
+// la ficha de la cuenta existente es adonde se iba.
+function pintarAviso(warn, rotulo, hits) {
+  warn.hidden = false;
+  warn.innerHTML = `${escHtml(rotulo)} ${hits.map((h) => `<button type="button" data-open="${h.id}">${escHtml(h.name)}</button>`).join(' · ')}`;
+  warn.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => {
+    document.getElementById('dlgNew').close();
+    openPanel(b.dataset.open);
+  }));
+}
+
+function desarmarCrear(dlg) {
+  const btn = dlg.querySelector('#nCreate');
+  delete btn.dataset.armed;
+  btn.textContent = 'Crear';
 }
 
 function optionsFor(list) {

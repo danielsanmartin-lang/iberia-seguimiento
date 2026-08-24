@@ -1,7 +1,8 @@
 // La tabla: cabecera con orden y filtro, filas con edición en celda, tiles de
 // KPI y selector de columnas. Todo se repinta desde memoria.
 import {
-  state, allColumns, updateField, ownerName, getValue, onChange, addNote, updateNote,
+  state, allColumns, updateField, updateFieldMany, ownerName, getValue, onChange,
+  addNote, updateNote,
 } from './store.js';
 import { getProfile, isAdmin, isFavorite, toggleFavorite, saveColumnPrefs } from './auth.js';
 import { attachMentions, renderNoteBody } from './mentions.js';
@@ -19,6 +20,12 @@ const STAR = '<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentCol
 
 let editing = null;   // { id, key } de la celda abierta
 let pendingRender = false;   // hubo cambios que no se pintaron por estar editando
+
+// Filas marcadas para editar en bloque. Vive fuera de render() para sobrevivir a
+// los repintados (Realtime, guardados), y se poda a lo visible en cada pintado:
+// nunca se actúa sobre una fila que un filtro se ha llevado de la pantalla.
+const selected = new Set();
+let lastSelId = null;   // ancla del rango con Shift
 
 // Celdas cuya última edición no llegó a la base de datos. La celda sigue
 // mostrando el valor de la base de datos (lo que no está guardado no puede
@@ -198,7 +205,13 @@ export function render() {
 
   const cols = visibleColumns();
   const rows = visibleRows();
-  const tpl = cols.map((c) => `minmax(${c.min}px, ${c.width})`).join(' ');
+  const visibles = new Set(rows.map((r) => r.id));
+  for (const id of selected) if (!visibles.has(id)) selected.delete(id);
+  const todas = rows.length > 0 && selected.size >= rows.length;
+  // La casilla de selección es una columna fija por delante de las del usuario.
+  // No es una columna de datos: no está en visibleColumns(), así que ni se
+  // ordena, ni se arrastra, ni se exporta.
+  const tpl = ['34px', ...cols.map((c) => `minmax(${c.min}px, ${c.width})`)].join(' ');
 
   const head = cols.map((c) => {
     const rotulo = c.noSort
@@ -219,10 +232,17 @@ export function render() {
                  draggable="true" title="Arrastra para mover la columna">${rotulo}${embudo}</div>`;
   }).join('');
 
+  const cabeceraSel = `<div class="gc gsel">
+    <input type="checkbox" data-sel-all ${todas ? 'checked' : ''}
+           title="Marcar o desmarcar todas las filas visibles"></div>`;
+
   const body = rows.map((a) => {
     const d = a.next_touch ? daysFromToday(a.next_touch) : null;
     const cls = d !== null && d < 0 ? ' overdue' : '';
-    return `<div class="grow${cls}" data-id="${a.id}">${cols.map((c) => {
+    const sel = selected.has(a.id);
+    const casilla = `<div class="gc gsel">
+      <input type="checkbox" data-sel ${sel ? 'checked' : ''}></div>`;
+    return `<div class="grow${cls}${sel ? ' selected' : ''}" data-id="${a.id}">${casilla}${cols.map((c) => {
       const p = pending.get(pkey(a.id, c.key));
       // La nota se edita en la celda como cualquier otro campo, pero solo la
       // suya: si es de otro, la celda no se ofrece como editable y el clic
@@ -237,16 +257,157 @@ export function render() {
   }).join('');
 
   document.getElementById('grid').innerHTML = `
-    <div class="gtable" style="--cols:${tpl}">
-      <div class="grow ghead">${head}</div>
+    <div class="gtable${selected.size ? ' has-sel' : ''}" style="--cols:${tpl}">
+      <div class="grow ghead">${cabeceraSel}${head}</div>
       <div class="gbody">${body || '<div class="gempty">Ninguna cuenta cumple los filtros.</div>'}</div>
     </div>`;
+
+  // Ni a medias ni del todo: el estado intermedio de la casilla de cabecera no
+  // se puede pintar desde el HTML.
+  const todo = document.querySelector('[data-sel-all]');
+  if (todo) todo.indeterminate = selected.size > 0 && !todas;
+  renderBulkBar();
 
   document.getElementById('rowCount').textContent =
     rows.length === state.accounts.length
       ? `${rows.length} cuentas`
       : `${rows.length} de ${state.accounts.length} cuentas`;
   document.getElementById('btnClear').hidden = !hasActiveFilters();
+}
+
+// ─────────────────────── selección múltiple ───────────────────────
+// Marcar filas y cambiarles el Owner o la Fecha de una vez. Es lo único que el
+// Excel hacía mejor que la app: reasignar una cartera eran diez ediciones celda
+// a celda. La escritura va en UNA petición (updateFieldMany) y deja un
+// «Deshacer» en el aviso, porque un cambio en bloque equivocado se arregla mal
+// a mano.
+
+// Repinta lo que depende de la selección sin rehacer la tabla: repintarla
+// entera por marcar una casilla devolvería el scroll al principio.
+function refreshSelUi() {
+  const grid = document.getElementById('grid');
+  if (!grid) return;
+  const filas = grid.querySelectorAll('.grow:not(.ghead)');
+  filas.forEach((row) => {
+    const on = selected.has(row.dataset.id);
+    row.classList.toggle('selected', on);
+    const box = row.querySelector('[data-sel]');
+    if (box) box.checked = on;
+  });
+  grid.querySelector('.gtable')?.classList.toggle('has-sel', selected.size > 0);
+  const todo = grid.querySelector('[data-sel-all]');
+  if (todo) {
+    todo.checked = filas.length > 0 && selected.size >= filas.length;
+    todo.indeterminate = selected.size > 0 && selected.size < filas.length;
+  }
+  renderBulkBar();
+}
+
+function renderBulkBar() {
+  const bar = document.getElementById('bulkBar');
+  if (!bar) return;
+  const n = selected.size;
+  bar.hidden = n === 0;
+  if (!n) { document.getElementById('bulkMenu')?.remove(); return; }
+  bar.innerHTML = `<span class="bulk-n">${n} seleccionada${n === 1 ? '' : 's'}</span>
+    <button class="btn" type="button" data-bulk="owner">Owner ▾</button>
+    <button class="btn" type="button" data-bulk="fecha">Fecha ▾</button>
+    <span class="spacer"></span>
+    <button class="btn ghost" type="button" data-bulk="none">Quitar selección</button>`;
+}
+
+// Desplegable colgado de un botón de la barra, como el de Exportar.
+function bulkMenu(anchorEl, html) {
+  document.getElementById('bulkMenu')?.remove();
+  const m = document.createElement('div');
+  m.id = 'bulkMenu';
+  m.className = 'fmenu mini';
+  m.innerHTML = html;
+  document.body.appendChild(m);
+  const r = anchorEl.getBoundingClientRect();
+  m.style.top = `${Math.round(r.bottom + 6)}px`;
+  m.style.left = `${Math.round(Math.max(8, Math.min(r.left, window.innerWidth - m.offsetWidth - 12)))}px`;
+  setTimeout(() => document.addEventListener('mousedown', function off(ev) {
+    if (m.contains(ev.target)) return;
+    document.removeEventListener('mousedown', off);
+    m.remove();
+  }), 0);
+  return m;
+}
+
+function menuOwnerBulk(anchorEl) {
+  const opts = state.profiles.filter((p) => p.is_active)
+    .map((p) => `<button type="button" data-v="${escHtml(p.id)}">${escHtml(p.full_name || p.email)}</button>`)
+    .join('');
+  const m = bulkMenu(anchorEl, `${opts}<button type="button" data-v="">— Sin owner</button>`);
+  m.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-v]');
+    if (!b) return;
+    const v = b.dataset.v || null;
+    m.remove();
+    aplicarEnBloque('owner_id', v, v ? `owner → ${b.textContent.trim()}` : 'sin owner');
+  });
+}
+
+function menuFechaBulk(anchorEl) {
+  const m = bulkMenu(anchorEl, `<div class="bulk-date">
+      <input type="date" data-d>
+      <button class="btn primary" type="button" data-apply>Aplicar</button>
+    </div>
+    <button type="button" data-clear>Quitar la fecha</button>`);
+  m.querySelector('[data-apply]').addEventListener('click', () => {
+    const v = m.querySelector('[data-d]').value;
+    if (!v) return;
+    m.remove();
+    aplicarEnBloque('next_touch', v, `fecha → ${fmtDate(v)}`);
+  });
+  m.querySelector('[data-clear]').addEventListener('click', () => {
+    m.remove();
+    aplicarEnBloque('next_touch', null, 'sin fecha');
+  });
+  m.querySelector('[data-d]').focus();
+}
+
+async function aplicarEnBloque(key, value, etiqueta) {
+  const ids = [...selected];
+  if (!ids.length) return;
+  const { error, updated, prev } = await updateFieldMany(ids, key, value);
+  // La selección se queda puesta también cuando falla: reintentar es volver a
+  // elegir el valor, no volver a marcar veinte filas.
+  if (error) { await writeFailed(error, 'guardar el cambio en bloque'); return; }
+  toast(`${updated} cuenta${updated === 1 ? '' : 's'}: ${etiqueta}.`, 'ok',
+    { label: 'Deshacer', fn: () => deshacerEnBloque(key, prev) });
+}
+
+async function deshacerEnBloque(key, prev) {
+  // Cada fila tenía lo suyo, y un UPDATE escribe un solo valor: se agrupan las
+  // filas que compartían estado anterior. En la práctica son uno o dos grupos
+  // («las de Ana» y «las que no tenían owner»), no veinte peticiones.
+  const grupos = new Map();
+  for (const [id, before] of prev) {
+    const k = JSON.stringify(before);
+    if (!grupos.has(k)) grupos.set(k, { before, ids: [] });
+    grupos.get(k).ids.push(id);
+  }
+  for (const { before, ids } of grupos.values()) {
+    // El owner_name se restaura tal cual estaba y no se deriva del owner_id: en
+    // las cuentas que vienen del Excel hay nombre sin usuario, y derivarlo lo
+    // borraría.
+    const derivados = key === 'owner_id' ? { owner_name: before.owner_name ?? null } : null;
+    const { error } = await updateFieldMany(ids, key, before[key] ?? null, derivados);
+    if (error) { await writeFailed(error, 'deshacer el cambio'); return; }
+  }
+  toast('Cambio deshecho.');
+}
+
+function initBulkBar() {
+  document.getElementById('bulkBar').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-bulk]');
+    if (!b) return;
+    if (b.dataset.bulk === 'owner') menuOwnerBulk(b);
+    if (b.dataset.bulk === 'fecha') menuFechaBulk(b);
+    if (b.dataset.bulk === 'none') { selected.clear(); lastSelId = null; refreshSelUi(); }
+  });
 }
 
 // ─────────────────────── edición en celda ───────────────────────
@@ -666,6 +827,7 @@ export function openColumnPicker(anchorEl) {
 export function initGrid() {
   const grid = document.getElementById('grid');
   initColumnDrag(grid);
+  initBulkBar();
 
   grid.addEventListener('click', (e) => {
     if (e.target.closest('[data-stop]')) return;    // enlaces de HubSpot
@@ -683,6 +845,35 @@ export function initGrid() {
     const filterBtn = e.target.closest('[data-filter]');
     if (filterBtn) {
       openFilterMenu(filterBtn.dataset.filter, filterBtn, render);
+      return;
+    }
+
+    // Las casillas de selección viven en una celda, pero no son un campo que
+    // editar: se atienden antes de que la celda haga nada.
+    if (e.target.closest('[data-sel-all]')) {
+      const rows = visibleRows();
+      const todas = rows.length > 0 && selected.size >= rows.length;
+      selected.clear();
+      if (!todas) rows.forEach((r) => selected.add(r.id));
+      lastSelId = null;
+      refreshSelUi();
+      return;
+    }
+    // Vale toda la celda, no solo la casilla: apuntar a 13 píxeles para marcar
+    // una fila es pedir puntería.
+    if (e.target.closest('.gsel')) {
+      const id = e.target.closest('.grow').dataset.id;
+      const rows = visibleRows();
+      // Shift marca el rango desde la última que tocaste, como en cualquier
+      // lista: marcar treinta filas seguidas no puede ser treinta clics.
+      const desde = e.shiftKey && lastSelId ? rows.findIndex((r) => r.id === lastSelId) : -1;
+      const hasta = rows.findIndex((r) => r.id === id);
+      if (desde >= 0 && hasta >= 0) {
+        for (let i = Math.min(desde, hasta); i <= Math.max(desde, hasta); i++) selected.add(rows[i].id);
+      } else if (selected.has(id)) selected.delete(id);
+      else selected.add(id);
+      lastSelId = id;
+      refreshSelUi();
       return;
     }
 
@@ -747,5 +938,8 @@ export function initGrid() {
     render();
   });
 
-  window.addEventListener('resize', closeFilterMenu);
+  window.addEventListener('resize', () => {
+    closeFilterMenu();
+    document.getElementById('bulkMenu')?.remove();
+  });
 }

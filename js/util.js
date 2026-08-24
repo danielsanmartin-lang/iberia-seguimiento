@@ -114,13 +114,19 @@ export function monthKeyISO(n = 0) {
 // ───────────────────── nombres de empresa ─────────────────────
 // Para detectar duplicados: "Allianz España, S.A." y "allianz espana sa" deben
 // colapsar en la misma clave.
-const SUFIJOS = /\b(s\.?a\.?u?|s\.?l\.?u?|sociedad anonima|sociedad limitada|inc|ltd|llc|gmbh|bv|nv|plc|group|grupo|holding|iberia|espana|spain|portugal)\b/g;
+// Las formas jurídicas admiten el espacio que deja quitar los puntos: "S.A."
+// llega aquí como "s a", y sin contemplarlo «Allianz España, S.A.» no colapsaba
+// con «Allianz España» —que es justo lo que esta función promete—.
+const SUFIJOS = /\b(s ?a ?u?|s ?l ?u?|sociedad anonima|sociedad limitada|inc|ltd|llc|gmbh|bv|nv|plc|group|grupo|holding|iberia|espana|spain|portugal)\b/g;
 
 export function normalizeName(s) {
   return String(s || '')
     .toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // quita acentos
     .replace(/[.,&/\\'"()-]/g, ' ')
+    // Los espacios se colapsan ANTES de quitar los sufijos: "s  a" no lo
+    // reconocería ninguna alternativa de la lista.
+    .replace(/\s+/g, ' ')
     .replace(SUFIJOS, ' ')
     .replace(/\s+/g, ' ')
     .trim();
