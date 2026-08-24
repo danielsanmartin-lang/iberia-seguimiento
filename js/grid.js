@@ -308,6 +308,8 @@ function renderBulkBar() {
   if (!bar) return;
   const n = selected.size;
   bar.hidden = n === 0;
+  // El aviso se aparta de la barra mientras esté puesta (los dos viven abajo).
+  document.body.classList.toggle('has-bulk', n > 0);
   if (!n) { document.getElementById('bulkMenu')?.remove(); return; }
   bar.innerHTML = `<span class="bulk-n">${n} seleccionada${n === 1 ? '' : 's'}</span>
     <button class="btn" type="button" data-bulk="owner">Owner ▾</button>

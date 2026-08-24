@@ -193,12 +193,22 @@ main{padding:18px;max-width:100%}
 .count{font-size:12px;color:var(--ink3);font-variant-numeric:tabular-nums;margin-right:4px}
 .hint{font-size:11.5px;color:var(--ink4);margin:9px 2px 0}
 
-/* Acciones en bloque: solo aparece con filas marcadas. */
+/* Acciones en bloque: solo aparece con filas marcadas.
+   Se queda pegada al borde inferior de la ventana mientras haya selección. Es
+   sticky y no fixed: conserva su hueco al final del contenido, así que no tapa
+   nada cuando se llega abajo del todo. Y el fondo es opaco (el tinte teal va
+   encima de la superficie, no en lugar de ella) porque flota sobre las filas. */
 .bulkbar{
+  position:sticky;bottom:12px;z-index:30;
   display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;
-  padding:7px 10px;border:1px solid var(--teal-bd);background:var(--teal-bg);
-  border-radius:var(--r);
+  padding:8px 10px;border:1px solid var(--teal-bd);border-radius:var(--r);
+  background-color:var(--surface);
+  background-image:linear-gradient(var(--teal-bg),var(--teal-bg));
+  box-shadow:var(--shadow);
 }
+/* El aviso vive en el mismo rincón de la pantalla: mientras la barra está
+   puesta, sube por encima de ella en vez de taparla. */
+body.has-bulk #toast{bottom:78px}
 .bulk-n{font-size:12.5px;font-weight:700;color:var(--teal-dk);font-variant-numeric:tabular-nums}
 /* La fila de fecha del desplegable: el input manda y «Aplicar» no ocupa el
    ancho entero como el resto de botones del menú mini. */
