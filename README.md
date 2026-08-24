@@ -93,11 +93,14 @@ Si la mención llega mientras tienes la app abierta, salta un aviso: la nota de
 otro ya viaja por Realtime, así que enterarse no debería exigir recargar. No hay
 correos ni notificaciones del navegador, a propósito.
 
-**Panel superior** — Cuentas, Hoy, Esta semana, Vencidos, Sin fecha, Mías,
-Favoritas, Menciones y recuentos por Owner. Todo clicable: filtra la tabla. Cada
-número se recalcula con los filtros puestos e ignora solo el suyo, así que dice
-cuántas filas verás al pulsarlo (con Owner = Ana, «Vencidos» son las vencidas de
-Ana) sin que los demás se muevan bajo el dedo al usarlos.
+**Panel superior** — Cuentas, Hoy, Esta semana, Próximos 7 días, Próximos 30 días,
+Vencidos, Sin fecha, Mías, Favoritas, Menciones y recuentos por Owner. Todo
+clicable: filtra la tabla. Cada número se recalcula con los filtros puestos e
+ignora solo el suyo, así que dice cuántas filas verás al pulsarlo (con Owner =
+Ana, «Vencidos» son las vencidas de Ana) sin que los demás se muevan bajo el dedo
+al usarlos. Los tramos de fecha no son disjuntos, van encajados: «Esta semana» va
+de hoy al domingo, y «Próximos 7 días» y «Próximos 30 días» cuentan desde hoy, así
+que cada uno abarca al anterior.
 
 **Export** — A `.xlsx` o CSV, exactamente lo que estés viendo (columnas visibles
 × filas filtradas). **No hay importación**: los datos entran por la tabla o por

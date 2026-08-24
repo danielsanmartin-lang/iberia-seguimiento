@@ -97,6 +97,8 @@ function renderKpis() {
       ${kpiTile(k.total, 'Cuentas', !hasActiveFilters(), attrTodo)}
       ${kpiTile(k.hoy, 'Hoy', filters.datePreset === 'hoy', 'data-kpi="hoy"')}
       ${kpiTile(k.semana, 'Esta semana', filters.datePreset === 'semana', 'data-kpi="semana"')}
+      ${kpiTile(k.prox7, 'Próximos 7 días', filters.datePreset === 'prox7', 'data-kpi="prox7" title="De hoy a dentro de 7 días"')}
+      ${kpiTile(k.prox30, 'Próximos 30 días', filters.datePreset === 'prox30', 'data-kpi="prox30" title="De hoy a dentro de 30 días, los 7 anteriores incluidos"')}
       ${kpiTile(k.vencidos, 'Vencidos', filters.datePreset === 'vencidos', 'data-kpi="vencidos"')}
       ${kpiTile(k.sinfecha, 'Sin fecha', filters.datePreset === 'sinfecha', 'data-kpi="sinfecha"')}
       ${kpiTile(k.mias, 'Mías', filters.mine, 'data-kpi="mias"')}

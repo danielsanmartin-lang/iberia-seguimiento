@@ -47,13 +47,25 @@ export function daysFromToday(iso) {
   return Math.round((target - today) / 86400000);
 }
 
+const isoOf = (d) => {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
 // Fin de la semana natural en curso (domingo), para el KPI "esta semana".
 export function endOfWeekISO() {
   const d = new Date();
   const dow = (d.getDay() + 6) % 7;       // 0 = lunes
   d.setDate(d.getDate() + (6 - dow));
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return isoOf(d);
+}
+
+// Hoy + n días. Los KPIs "próximos 7/30 días" son horizontes móviles: cuentan a
+// partir de hoy, sin esperar al lunes ni al día 1.
+export function inDaysISO(n) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return isoOf(d);
 }
 
 // ───────────────────── nombres de empresa ─────────────────────
