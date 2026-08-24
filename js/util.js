@@ -60,12 +60,24 @@ export function endOfWeekISO() {
   return isoOf(d);
 }
 
-// Hoy + n días. Los KPIs "próximos 7/30 días" son horizontes móviles: cuentan a
-// partir de hoy, sin esperar al lunes ni al día 1.
-export function inDaysISO(n) {
+// Fin de la semana natural siguiente (domingo), para el KPI "próxima semana". Esa
+// semana va desde el día siguiente a endOfWeekISO() hasta aquí: lunes a domingo
+// enteros, aunque hoy sea domingo.
+export function endOfNextWeekISO() {
   const d = new Date();
-  d.setDate(d.getDate() + n);
+  const dow = (d.getDay() + 6) % 7;       // 0 = lunes
+  d.setDate(d.getDate() + (13 - dow));
   return isoOf(d);
+}
+
+// Mes natural en curso + n meses, como 'YYYY-MM'. Los KPIs de mes comparan por
+// este prefijo en vez de por un rango de días: una fecha de agenda ya lo lleva
+// delante, así que no hace falta calcular el último día del mes.
+export function monthKeyISO(n = 0) {
+  const d = new Date();
+  d.setDate(1);                           // sin esto, sumar un mes al 31 salta al siguiente
+  d.setMonth(d.getMonth() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 // ───────────────────── nombres de empresa ─────────────────────

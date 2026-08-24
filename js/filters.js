@@ -3,12 +3,12 @@
 import { state, getValue, ownerName, columnByKey, notesFor } from './store.js';
 import { getProfile, isFavorite } from './auth.js';
 import { pendingAccountIds } from './mentions.js';
-import { escHtml, todayISO, endOfWeekISO, inDaysISO, fmtMonth } from './util.js';
+import { escHtml, todayISO, endOfWeekISO, endOfNextWeekISO, monthKeyISO, fmtMonth } from './util.js';
 
 export const filters = {
   search: '',
   values: {},        // clave de columna -> Set de valores marcados ('' = vacío)
-  datePreset: null,  // 'hoy' | 'semana' | 'prox7' | 'prox30' | 'vencidos' | 'sinfecha'
+  datePreset: null,  // 'hoy' | 'semana' | 'proxsemana' | 'mes' | 'proxmes' | 'vencidos' | 'sinfecha'
   mine: false,
   fav: false,        // solo mis favoritas
   mentions: false,   // solo donde me han mencionado y no lo he atendido
@@ -64,8 +64,9 @@ function limites() {
   return {
     hoy: todayISO(),
     finSemana: endOfWeekISO(),
-    fin7: inDaysISO(7),
-    fin30: inDaysISO(30),
+    finProxSemana: endOfNextWeekISO(),
+    mes: monthKeyISO(),
+    proxMes: monthKeyISO(1),
   };
 }
 
@@ -73,9 +74,10 @@ function limites() {
 // para los KPIs: el número del tile tiene que salir del mismo cálculo que las
 // filas que salen al pulsarlo, no de otro que dé lo mismo por poco.
 //
-// No son cortes disjuntos y no pretenden serlo, son horizontes encajados: 'hoy'
-// cae dentro de 'semana', 'semana' (de hoy al domingo) dentro de 'prox7', y ese
-// dentro de 'prox30'.
+// No son cortes disjuntos y no pretenden serlo. 'hoy' cae dentro de 'semana', y
+// 'mes' es el mes natural entero, así que incluye lo ya vencido de este mes y se
+// solapa con las semanas. 'proxsemana' y 'proxmes' sí empiezan donde acaban
+// 'semana' y 'mes', que es lo que se espera de "la que viene".
 function enPreset(acc, preset, L) {
   const d = acc.next_touch;
   if (preset === 'sinfecha') return !d;
@@ -83,8 +85,9 @@ function enPreset(acc, preset, L) {
   if (preset === 'vencidos') return d < L.hoy;
   if (preset === 'hoy') return d === L.hoy;
   if (preset === 'semana') return d >= L.hoy && d <= L.finSemana;
-  if (preset === 'prox7') return d >= L.hoy && d <= L.fin7;
-  if (preset === 'prox30') return d >= L.hoy && d <= L.fin30;
+  if (preset === 'proxsemana') return d > L.finSemana && d <= L.finProxSemana;
+  if (preset === 'mes') return String(d).slice(0, 7) === L.mes;
+  if (preset === 'proxmes') return String(d).slice(0, 7) === L.proxMes;
   return true;
 }
 
@@ -204,15 +207,16 @@ export function computeKpis() {
   const L = limites();
   const base = state.accounts.filter((a) => matches(a, OMITE_FECHA));
   const k = {
-    total: base.length, hoy: 0, semana: 0, prox7: 0, prox30: 0, vencidos: 0, sinfecha: 0,
+    total: base.length, hoy: 0, semana: 0, proxsemana: 0, mes: 0, proxmes: 0, vencidos: 0, sinfecha: 0,
     mias: 0, favoritas: 0, menciones: 0,
   };
   for (const a of base) {
     if (enPreset(a, 'sinfecha', L)) { k.sinfecha++; continue; }
     if (enPreset(a, 'hoy', L)) k.hoy++;
     if (enPreset(a, 'semana', L)) k.semana++;
-    if (enPreset(a, 'prox7', L)) k.prox7++;
-    if (enPreset(a, 'prox30', L)) k.prox30++;
+    if (enPreset(a, 'proxsemana', L)) k.proxsemana++;
+    if (enPreset(a, 'mes', L)) k.mes++;
+    if (enPreset(a, 'proxmes', L)) k.proxmes++;
     if (enPreset(a, 'vencidos', L)) k.vencidos++;
   }
   // «Mías», «Favoritas» y «Menciones» son otros tantos mandos: respetan el
