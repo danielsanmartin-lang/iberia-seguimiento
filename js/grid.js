@@ -326,8 +326,14 @@ function bulkMenu(anchorEl, html) {
   m.className = 'fmenu mini';
   m.innerHTML = html;
   document.body.appendChild(m);
+  // La barra vive pegada al borde inferior de la ventana, así que por debajo casi
+  // nunca hay sitio: el menú se abre hacia arriba salvo que quepa abajo. Se mide
+  // ya montado, que es cuando el menú tiene alto.
   const r = anchorEl.getBoundingClientRect();
-  m.style.top = `${Math.round(r.bottom + 6)}px`;
+  const alto = m.offsetHeight;
+  const abajo = r.bottom + 6;
+  const cabeAbajo = abajo + alto <= window.innerHeight - 8;
+  m.style.top = `${Math.round(cabeAbajo ? abajo : Math.max(8, r.top - 6 - alto))}px`;
   m.style.left = `${Math.round(Math.max(8, Math.min(r.left, window.innerWidth - m.offsetWidth - 12)))}px`;
   setTimeout(() => document.addEventListener('mousedown', function off(ev) {
     if (m.contains(ev.target)) return;
